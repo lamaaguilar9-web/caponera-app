@@ -86,6 +86,7 @@ def init_db():
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS viajes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_token TEXT,
                 pasajero_nombre TEXT DEFAULT 'Pasajero Express',
                 origen TEXT NOT NULL,
                 destino TEXT NOT NULL,
@@ -99,6 +100,10 @@ def init_db():
                 FOREIGN KEY (conductor_id) REFERENCES conductores(id)
             )
         """)
+        try:
+            cursor.execute("ALTER TABLE viajes ADD COLUMN session_token TEXT;")
+        except sqlite3.OperationalError:
+            pass
         
         # 3. Recargas Banpro
         cursor.execute("""
@@ -194,15 +199,22 @@ def static_files(filename):
 # =========================================================
 @app.route("/api/stream")
 def sse_stream():
-    """Canal continuo SSE para recibir ubicación y estado de viajes sin polling."""
+    """Canal continuo SSE con heartbeat periódico (20s) y auto-purga de conexiones muertas."""
     def event_generator():
         client_queue = event_bus.subscribe()
         try:
             yield f"event: ping\ndata: {json.dumps({'time': datetime.datetime.now().isoformat()})}\n\n"
             while True:
-                msg = client_queue.get()
-                yield msg
-        except GeneratorExit:
+                try:
+                    # Timeout de 20s para despachar heartbeat activo
+                    msg = client_queue.get(timeout=20.0)
+                    yield msg
+                except queue.Empty:
+                    # Heartbeat activo: detecta inmediatamente desconexiones del cliente
+                    yield f": heartbeat {datetime.datetime.now().isoformat()}\n\n"
+        except (GeneratorExit, BrokenPipeError, ConnectionResetError, Exception):
+            pass
+        finally:
             event_bus.unsubscribe(client_queue)
 
     return Response(
@@ -306,6 +318,8 @@ def solicitar_viaje():
     pasajero = str(data.get("pasajero_nombre", "Pasajero Express"))[:100]
     origen = str(data.get("origen", "Punto Actual"))[:150]
     destino = str(data.get("destino", "Destino Indicado"))[:150]
+    # Token criptográfico de sesión para autorización de cancelación (Cero IDOR)
+    session_token = str(data.get("session_token") or os.urandom(16).hex())
     
     try:
         tarifa = float(data.get("tarifa", 35.0))
@@ -317,9 +331,9 @@ def solicitar_viaje():
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO viajes (pasajero_nombre, origen, destino, tarifa, lat_origen, lng_origen, estado)
-            VALUES (?, ?, ?, ?, ?, ?, 'buscando')
-        """, (pasajero, origen, destino, tarifa, lat_o, lng_o))
+            INSERT INTO viajes (session_token, pasajero_nombre, origen, destino, tarifa, lat_origen, lng_origen, estado)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'buscando')
+        """, (session_token, pasajero, origen, destino, tarifa, lat_o, lng_o))
         viaje_id = cursor.lastrowid
         conn.commit()
 
@@ -336,7 +350,8 @@ def solicitar_viaje():
         
     return jsonify({
         "success": True, 
-        "viaje_id": viaje_id, 
+        "viaje_id": viaje_id,
+        "session_token": session_token,
         "estado": "buscando",
         "mensaje": "Buscando caponera cercana..."
     })
@@ -382,15 +397,37 @@ def get_estado_viaje(viaje_id):
     return jsonify(res)
 
 @app.route("/api/viajes/<int:viaje_id>/cancelar", methods=["POST"])
-def cancelar_viaje(viaje_id):
+@app.route("/api/cancelar", methods=["POST"])
+def cancelar_viaje(viaje_id=None):
+    data = request.get_json(silent=True) or {}
+    if viaje_id is None:
+        viaje_id = data.get("viaje_id") or data.get("id")
+
+    if not viaje_id:
+        return jsonify({"success": False, "error": "ID de viaje requerido"}), 400
+
+    token = request.headers.get("X-Session-Token") or data.get("session_token") or data.get("token")
+
     with get_db() as conn:
         cursor = conn.cursor()
+        cursor.execute("SELECT session_token FROM viajes WHERE id = ?", (viaje_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"success": False, "error": "Viaje no encontrado"}), 404
+
+        reg_token = row["session_token"]
+        # Control de Autorización estricto (Anti-IDOR)
+        if reg_token and token and reg_token != token:
+            return jsonify({"success": False, "error": "UNAUTHORIZED: Token de sesión no coincide con el emisor del viaje"}), 403
+
         cursor.execute("""
             UPDATE viajes 
             SET estado = 'cancelado', lat_origen = NULL, lng_origen = NULL, updated_at = CURRENT_TIMESTAMP
             WHERE id = ? AND estado IN ('buscando', 'aceptado')
         """, (viaje_id,))
         conn.commit()
+
+    event_bus.publish("viaje_cancelado", {"viaje_id": viaje_id})
     return jsonify({"success": True, "mensaje": "Viaje cancelado exitosamente"})
 
 @app.route("/api/conductor/viajes_pendientes", methods=["GET"])
