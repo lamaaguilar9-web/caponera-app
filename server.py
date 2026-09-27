@@ -602,8 +602,9 @@ def admin_panel():
     return render_template_string(ADMIN_HTML, conductores=conductores, viajes=viajes)
 
 if __name__ == "__main__":
+    host_bind = os.getenv("HOST", "127.0.0.1")
     print("==================================================")
-    print("[OK] CAPONERA ENGINE ACTIVO en http://0.0.0.0:5054")
+    print(f"[OK] CAPONERA ENGINE ACTIVO en http://{host_bind}:5054")
     print("   Tiempo Real (SSE) y API de Despacho Listos")
     print("==================================================")
-    app.run(host="0.0.0.0", port=5054, debug=False, threaded=True)
+    app.run(host=host_bind, port=5054, debug=False, threaded=True)
