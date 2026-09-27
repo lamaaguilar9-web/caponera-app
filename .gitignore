@@ -1,0 +1,31 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+.pytest_cache/
+
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# Secrets and Environment Variables
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+client_secrets.json
+
+# Databases and Local Data
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# OS Metadata
+.DS_Store
+Thumbs.db
+desktop.ini

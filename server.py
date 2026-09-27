@@ -1,0 +1,572 @@
+import os
+import math
+import json
+import queue
+import sqlite3
+import datetime
+from typing import List
+from flask import Flask, request, jsonify, send_from_directory, render_template_string, Response
+
+app = Flask(__name__, static_folder=".", static_url_path="")
+
+DB_PATH = os.path.join(os.path.dirname(__file__), "caponera.db")
+
+# =========================================================
+# CORS HEADER (REQUERIDO PARA CAPONERA-APP.SURGE.SH)
+# =========================================================
+@app.after_request
+def add_cors(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+    return response
+
+# =========================================================
+# BUS DE EVENTOS EN MEMORIA (SSE - TIEMPO REAL)
+# =========================================================
+class EventBus:
+    def __init__(self):
+        self.listeners: List[queue.Queue] = []
+
+    def subscribe(self) -> queue.Queue:
+        q = queue.Queue(maxsize=100)
+        self.listeners.append(q)
+        return q
+
+    def unsubscribe(self, q: queue.Queue):
+        if q in self.listeners:
+            try:
+                self.listeners.remove(q)
+            except ValueError:
+                pass
+
+    def publish(self, event_type: str, data: dict):
+        payload = f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+        for q in list(self.listeners):
+            try:
+                q.put_nowait(payload)
+            except (queue.Full, Exception):
+                self.unsubscribe(q)
+
+event_bus = EventBus()
+
+# =========================================================
+# BASE DE DATOS Y CONEXIONES (MODO WAL)
+# =========================================================
+def get_db():
+    conn = sqlite3.connect(DB_PATH, timeout=10.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA foreign_keys=ON;")
+    conn.execute("PRAGMA busy_timeout=5000;")
+    return conn
+
+def init_db():
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # 1. Conductores
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS conductores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                telefono TEXT NOT NULL UNIQUE,
+                unidad TEXT NOT NULL,
+                lat REAL DEFAULT 12.1364,
+                lng REAL DEFAULT -86.2514,
+                is_online INTEGER DEFAULT 0,
+                plan_activo INTEGER DEFAULT 1,
+                plan_nombre TEXT DEFAULT 'Pionero (15 Días Gratis)',
+                plan_expira TEXT,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # 2. Viajes
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS viajes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pasajero_nombre TEXT DEFAULT 'Pasajero Express',
+                origen TEXT NOT NULL,
+                destino TEXT NOT NULL,
+                tarifa REAL NOT NULL,
+                lat_origen REAL,
+                lng_origen REAL,
+                estado TEXT DEFAULT 'buscando',
+                conductor_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (conductor_id) REFERENCES conductores(id)
+            )
+        """)
+        
+        # 3. Recargas Banpro
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS recargas_banpro (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                conductor_id INTEGER NOT NULL,
+                plan_nombre TEXT NOT NULL,
+                monto REAL NOT NULL,
+                referencia TEXT,
+                estado TEXT DEFAULT 'pendiente',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (conductor_id) REFERENCES conductores(id)
+            )
+        """)
+        
+        # 4. Registro de Visitas y Analítica
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS visitas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ip TEXT,
+                user_agent TEXT,
+                origen_url TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Insertar conductores iniciales si la tabla está vacía
+        cursor.execute("SELECT COUNT(*) FROM conductores")
+        if cursor.fetchone()[0] == 0:
+            exp_date = (datetime.datetime.now() + datetime.timedelta(days=15)).strftime("%Y-%m-%d")
+            initial_drivers = [
+                ("José Ramón", "50589130414", "Unidad #7 · Caponera Express", 12.1370, -86.2520, 1, 1, "Pionero (15 Días Gratis)", exp_date),
+                ("Alex Mendoza", "50588881111", "Caponera #14 (Tarifa Básica)", 12.1390, -86.2490, 1, 1, "Pionero (15 Días Gratis)", exp_date),
+                ("María González", "50588882222", "Moto Taxi #09", 12.1340, -86.2540, 1, 1, "Pionero (15 Días Gratis)", exp_date)
+            ]
+            cursor.executemany("""
+                INSERT INTO conductores (nombre, telefono, unidad, lat, lng, is_online, plan_activo, plan_nombre, plan_expira)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, initial_drivers)
+            
+        conn.commit()
+
+init_db()
+
+# Cálculo de distancia Haversine en KM
+def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    try:
+        R = 6371.0
+        dlat = math.radians(lat2 - lat1)
+        dlon = math.radians(lon2 - lon1)
+        a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return round(R * c, 2)
+    except Exception:
+        return 1.0
+
+# =========================================================
+# RUTAS ESTÁTICAS Y PWA
+# =========================================================
+@app.route("/")
+def index():
+    try:
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        if ip and ',' in ip:
+            ip = ip.split(',')[0].strip()
+        ua = request.headers.get('User-Agent', '')[:255]
+        ref = (request.referrer or '')[:255]
+        with get_db() as conn:
+            conn.cursor().execute("INSERT INTO visitas (ip, user_agent, origen_url) VALUES (?, ?, ?)", (ip, ua, ref))
+            conn.commit()
+    except Exception:
+        pass
+    return send_from_directory(".", "index.html")
+
+@app.route("/manifest.json")
+def manifest():
+    return send_from_directory(".", "manifest.json", mimetype="application/manifest+json")
+
+@app.route("/sw.js")
+def service_worker():
+    return send_from_directory(".", "sw.js", mimetype="application/javascript")
+
+@app.route("/privacidad")
+def privacy_page():
+    return send_from_directory(".", "privacidad.html")
+
+@app.route("/<path:filename>")
+def static_files(filename):
+    return send_from_directory(".", filename)
+
+# =========================================================
+# STREAMING SSE EN TIEMPO REAL
+# =========================================================
+@app.route("/api/stream")
+def sse_stream():
+    """Canal continuo SSE para recibir ubicación y estado de viajes sin polling."""
+    def event_generator():
+        client_queue = event_bus.subscribe()
+        try:
+            yield f"event: ping\ndata: {json.dumps({'time': datetime.datetime.now().isoformat()})}\n\n"
+            while True:
+                msg = client_queue.get()
+                yield msg
+        except GeneratorExit:
+            event_bus.unsubscribe(client_queue)
+
+    return Response(
+        event_generator(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive"
+        }
+    )
+
+# =========================================================
+# RUTAS API: CONDUCTORES
+# =========================================================
+@app.route("/api/conductores", methods=["GET"])
+@app.route("/api/conductores/activos", methods=["GET"])
+def get_conductores():
+    lat = request.args.get("lat", type=float)
+    lng = request.args.get("lng", type=float)
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, nombre, telefono, unidad, lat, lng, is_online, plan_activo FROM conductores WHERE is_online = 1 AND plan_activo = 1")
+        rows = cursor.fetchall()
+        
+    conductores = []
+    for r in rows:
+        d = {
+            "id": r["id"],
+            "nombre": r["nombre"],
+            "name": r["nombre"],
+            "telefono": r["telefono"],
+            "phone": r["telefono"],
+            "unidad": r["unidad"],
+            "unit": r["unidad"],
+            "lat": r["lat"],
+            "lng": r["lng"],
+            "is_online": r["is_online"],
+            "plan_activo": r["plan_activo"]
+        }
+        if lat is not None and lng is not None and d["lat"] is not None and d["lng"] is not None:
+            dist_km = calculate_distance(lat, lng, d["lat"], d["lng"])
+            d["distancia_km"] = round(dist_km, 2)
+            d["tiempo_llegada_min"] = max(2, int(dist_km * 4))
+        else:
+            d["distancia_km"] = 0.5
+            d["tiempo_llegada_min"] = 3
+        conductores.append(d)
+        
+    conductores.sort(key=lambda x: x.get("distancia_km", 0))
+    
+    # Si la petición viene de app.js clásico espera array directo, si viene de nueva versión espera dict
+    if request.path == "/api/conductores/activos":
+        return jsonify(conductores)
+    return jsonify({"success": True, "conductores": conductores})
+
+@app.route("/api/conductor/ubicacion", methods=["POST"])
+@app.route("/api/conductor/<int:conductor_id>/posicion", methods=["POST"])
+def update_posicion(conductor_id=None):
+    data = request.get_json(silent=True) or {}
+    
+    if conductor_id is None:
+        conductor_id = data.get("conductor_id", 1)
+        
+    try:
+        conductor_id = int(conductor_id)
+        lat = float(data.get("lat"))
+        lng = float(data.get("lng"))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Coordenadas numéricas requeridas"}), 400
+
+    is_online = 1 if data.get("is_online", 1) in (1, True, "1") else 0
+        
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE conductores 
+            SET lat = ?, lng = ?, is_online = ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        """, (lat, lng, is_online, conductor_id))
+        conn.commit()
+
+    # Difusión en tiempo real por SSE
+    event_bus.publish("conductor_movimiento", {
+        "conductor_id": conductor_id,
+        "lat": lat,
+        "lng": lng,
+        "is_online": is_online
+    })
+        
+    return jsonify({"success": True, "mensaje": "Posición actualizada"})
+
+# =========================================================
+# RUTAS API: VIAJES Y ASIGNACIÓN ATÓMICA
+# =========================================================
+@app.route("/api/viajes/crear", methods=["POST"])
+@app.route("/api/viajes/solicitar", methods=["POST"])
+def solicitar_viaje():
+    data = request.get_json(silent=True) or {}
+    pasajero = str(data.get("pasajero_nombre", "Pasajero Express"))[:100]
+    origen = str(data.get("origen", "Punto Actual"))[:150]
+    destino = str(data.get("destino", "Destino Indicado"))[:150]
+    
+    try:
+        tarifa = float(data.get("tarifa", 35.0))
+        lat_o = float(data.get("lat_origen", data.get("lat", 12.1364)))
+        lng_o = float(data.get("lng_origen", data.get("lng", -86.2514)))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Parámetros inválidos"}), 400
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO viajes (pasajero_nombre, origen, destino, tarifa, lat_origen, lng_origen, estado)
+            VALUES (?, ?, ?, ?, ?, ?, 'buscando')
+        """, (pasajero, origen, destino, tarifa, lat_o, lng_o))
+        viaje_id = cursor.lastrowid
+        conn.commit()
+
+    # Notificar a los conductores conectados en vivo
+    event_bus.publish("nuevo_viaje", {
+        "viaje_id": viaje_id,
+        "pasajero": pasajero,
+        "origen": origen,
+        "destino": destino,
+        "tarifa": tarifa,
+        "lat": lat_o,
+        "lng": lng_o
+    })
+        
+    return jsonify({
+        "success": True, 
+        "viaje_id": viaje_id, 
+        "estado": "buscando",
+        "mensaje": "Buscando caponera cercana..."
+    })
+
+@app.route("/api/viajes/<int:viaje_id>/estado", methods=["GET"])
+def get_estado_viaje(viaje_id):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT v.id, v.estado, v.tarifa, v.origen, v.destino, v.conductor_id,
+                   c.id as cond_id, c.nombre as conductor_nombre, c.telefono as conductor_telefono, c.unidad as conductor_unidad
+            FROM viajes v
+            LEFT JOIN conductores c ON v.conductor_id = c.id
+            WHERE v.id = ?
+        """, (viaje_id,))
+        row = cursor.fetchone()
+        
+    if not row:
+        return jsonify({"success": False, "error": "Viaje no encontrado"}), 404
+    
+    conductor_obj = None
+    if row["conductor_id"]:
+        conductor_obj = {
+            "id": row["cond_id"],
+            "nombre": row["conductor_nombre"],
+            "telefono": row["conductor_telefono"],
+            "unidad": row["conductor_unidad"]
+        }
+        
+    res = {
+        "id": row["id"],
+        "estado": row["estado"],
+        "tarifa": row["tarifa"],
+        "origen": row["origen"],
+        "destino": row["destino"],
+        "conductor_id": row["conductor_id"],
+        "conductor_nombre": row["conductor_nombre"],
+        "conductor_telefono": row["conductor_telefono"],
+        "conductor_unidad": row["conductor_unidad"],
+        "conductor": conductor_obj,
+        "success": True
+    }
+    return jsonify(res)
+
+@app.route("/api/viajes/<int:viaje_id>/cancelar", methods=["POST"])
+def cancelar_viaje(viaje_id):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE viajes 
+            SET estado = 'cancelado', lat_origen = NULL, lng_origen = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND estado IN ('buscando', 'aceptado')
+        """, (viaje_id,))
+        conn.commit()
+    return jsonify({"success": True, "mensaje": "Viaje cancelado exitosamente"})
+
+@app.route("/api/conductor/viajes_pendientes", methods=["GET"])
+@app.route("/api/conductor/viajes-pendientes", methods=["GET"])
+def get_viajes_pendientes():
+    conductor_lat = float(request.args.get("lat", 12.1364))
+    conductor_lng = float(request.args.get("lng", -86.2514))
+    max_km = float(request.args.get("radio_km", 4.0))
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM viajes WHERE estado = 'buscando' ORDER BY id DESC LIMIT 10")
+        rows = cursor.fetchall()
+        
+    carreras = []
+    for r in rows:
+        dist_km = calculate_distance(conductor_lat, conductor_lng, r["lat_origen"] or 12.1364, r["lng_origen"] or -86.2514)
+        if dist_km <= max_km:
+            carreras.append({
+                "id": r["id"],
+                "pasajero": r["pasajero_nombre"],
+                "origen": r["origen"],
+                "destino": r["destino"],
+                "tarifa": r["tarifa"],
+                "distancia_km": dist_km,
+                "created_at": r["created_at"]
+            })
+            
+    if request.path == "/api/conductor/viajes-pendientes":
+        return jsonify(carreras)
+    return jsonify({"success": True, "viajes": carreras})
+
+@app.route("/api/viajes/<int:viaje_id>/aceptar", methods=["POST"])
+def aceptar_viaje(viaje_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        conductor_id = int(data.get("conductor_id", 1))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "ID de conductor inválido"}), 400
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        # Asignación ATÓMICA: previene condiciones de carrera si dos conductores aceptan a la vez
+        cursor.execute("""
+            UPDATE viajes 
+            SET estado = 'aceptado', conductor_id = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND estado = 'buscando'
+        """, (conductor_id, viaje_id))
+        conn.commit()
+        
+        if cursor.rowcount == 0:
+            return jsonify({"success": False, "error": "El viaje ya fue tomado por otro conductor"}), 409
+
+        cursor.execute("SELECT id, nombre, telefono, unidad FROM conductores WHERE id = ?", (conductor_id,))
+        cond_row = cursor.fetchone()
+        cond_data = dict(cond_row) if cond_row else {}
+
+    # Notificar al pasajero en tiempo real por SSE
+    event_bus.publish("viaje_aceptado", {
+        "viaje_id": viaje_id,
+        "conductor": cond_data
+    })
+        
+    return jsonify({
+        "success": True, 
+        "mensaje": "¡Viaje asignado con éxito! Dirígete al punto de recogida.",
+        "conductor": cond_data
+    })
+
+# =========================================================
+# RUTAS API: RECARGAS BANPRO
+# =========================================================
+@app.route("/api/conductor/recarga", methods=["POST"])
+def registrar_recarga():
+    data = request.get_json(silent=True) or {}
+    try:
+        conductor_id = int(data.get("conductor_id", 1))
+        monto = float(data.get("monto", 50.0))
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "error": "Datos inválidos"}), 400
+
+    plan_nombre = str(data.get("plan_nombre", "Semanal (7 Días)"))[:50]
+    referencia = str(data.get("referencia", ""))[:100]
+    
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO recargas_banpro (conductor_id, plan_nombre, monto, referencia, estado)
+            VALUES (?, ?, ?, ?, 'pendiente')
+        """, (conductor_id, plan_nombre, monto, referencia))
+        conn.commit()
+        
+    return jsonify({"success": True, "mensaje": "Comprobante registrado. En revisión."})
+
+# =========================================================
+# PANEL DE ADMINISTRACIÓN
+# =========================================================
+ADMIN_HTML = """
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Panel de Control · Caponera App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #090d16; color: #fff; padding: 20px; }
+    .card { background: #131c2e; padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #1e2d4a; }
+    h1, h2 { color: #10b981; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #1e2d4a; font-size: 0.9rem; }
+    th { color: #94a3b8; }
+    .badge { padding: 4px 8px; border-radius: 6px; font-weight: 700; font-size: 0.75rem; }
+    .badge-success { background: rgba(16,185,129,0.2); color: #10b981; }
+    .badge-warning { background: rgba(245,158,11,0.2); color: #f59e0b; }
+    .btn { display: inline-block; padding: 8px 16px; background: #10b981; color: #fff; text-decoration: none; border-radius: 6px; font-weight: 600; margin-bottom: 15px; }
+  </style>
+</head>
+<body>
+  <h1>🛺 Caponera App · Panel de Control</h1>
+  <a href="/" class="btn">📱 Abrir App en Vivo</a>
+  <div class="card">
+    <h2>Conductores Registrados</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Nombre</th><th>Teléfono</th><th>Unidad</th><th>Plan</th><th>Estado</th></tr>
+      </thead>
+      <tbody>
+        {% for c in conductores %}
+        <tr>
+          <td>{{ c.id }}</td>
+          <td>{{ c.nombre }}</td>
+          <td>{{ c.telefono }}</td>
+          <td>{{ c.unidad }}</td>
+          <td><span class="badge badge-success">{{ c.plan_nombre }}</span></td>
+          <td>{{ 'Online 🟢' if c.is_online else 'Offline ⚪' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h2>Últimos Viajes Solicitados</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Pasajero</th><th>Origen ➔ Destino</th><th>Tarifa</th><th>Estado</th></tr>
+      </thead>
+      <tbody>
+        {% for v in viajes %}
+        <tr>
+          <td>#{{ v.id }}</td>
+          <td>{{ v.pasajero_nombre }}</td>
+          <td>{{ v.origen }} ➔ {{ v.destino }}</td>
+          <td>C$ {{ v.tarifa }}</td>
+          <td><span class="badge badge-warning">{{ v.estado }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>
+"""
+
+@app.route("/admin")
+def admin_panel():
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM conductores")
+        conductores = [dict(r) for r in cursor.fetchall()]
+        cursor.execute("SELECT * FROM viajes ORDER BY id DESC LIMIT 10")
+        viajes = [dict(r) for r in cursor.fetchall()]
+    return render_template_string(ADMIN_HTML, conductores=conductores, viajes=viajes)
+
+if __name__ == "__main__":
+    print("==================================================")
+    print("[OK] CAPONERA ENGINE ACTIVO en http://0.0.0.0:5054")
+    print("   Tiempo Real (SSE) y API de Despacho Listos")
+    print("==================================================")
+    app.run(host="0.0.0.0", port=5054, debug=False, threaded=True)

@@ -1,0 +1,9 @@
+services:
+  caponera-app:
+    build: .
+    container_name: caponera_app
+    restart: unless-stopped
+    ports:
+      - "5054:5054"
+    volumes:
+      - ./caponera.db:/app/caponera.db

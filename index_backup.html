@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <link rel="manifest" href="manifest.json?v=2">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
+  <link rel="icon" type="image/png" href="icon-192.png?v=2">
+  <meta name="theme-color" content="#090d16">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Caponera App 🛺 | Transporte y Mandados en Nicaragua</title>
+  
+  <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet Map CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  
+  <!-- Main Stylesheet (Cache-busted) -->
+  <link rel="stylesheet" href="style.css?v=6">
+</head>
+<body>
+
+  <div class="mobile-wrapper">
+
+    <!-- =========================================================
+         MODERN STATUS BAR & TOP HEADER
+         ========================================================= -->
+    <header class="app-top-header">
+      <button class="icon-btn" id="btnMenuToggle" aria-label="Menú">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+      </button>
+      
+      <div class="app-brand-title">
+        <span class="brand-name">Caponera <span class="brand-highlight">App</span> 🛺</span>
+      </div>
+
+      <div class="header-right-actions">
+        <button class="icon-btn user-avatar-btn" id="btnPerfil" title="Mi Perfil">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        </button>
+        <button class="icon-btn notif-btn" id="btnNotif" title="Notificaciones">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          <span class="notif-badge"></span>
+        </button>
+      </div>
+    </header>
+
+    <!-- =========================================================
+         SCREEN CONTAINER (ACTIVE VIEWS)
+         ========================================================= -->
+    <main class="app-main-content">
+
+      <!-- =========================================================
+           VIEW: MAIN PASSENGER MAP & TRIP SELECTOR (MOCKUP REPLICA)
+           ========================================================= -->
+      <section id="screenMainPassenger" class="screen-view active">
+        
+        <!-- Search & Tab Controls (Floating Above Map) -->
+        <div class="map-overlay-top">
+          
+          <!-- Floating Modern Search Bar -->
+          <div class="floating-search-bar" id="btnOpenSearch">
+            <div class="search-icon-wrap">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </div>
+            <div class="search-input-content">
+              <span class="search-main-label">¿A dónde vamos?</span>
+              <span class="search-sub-label">Ingresa tu dirección o destino</span>
+            </div>
+            <button class="mic-btn" aria-label="Búsqueda por voz">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+            </button>
+          </div>
+
+          <!-- Service Category Tabs (Viajes vs Envíos) -->
+          <div class="service-nav-tabs">
+            <button class="tab-btn active" id="tabViajes" data-tab="viajes">
+              <span>Viajes 🛺</span>
+            </button>
+            <button class="tab-btn" id="tabEnvios" data-tab="envios">
+              <span>Envíos / Mandados 📦</span>
+            </button>
+          </div>
+
+              <!-- City Selector & Target Location Pill -->
+          <div class="map-controls-row">
+            <div class="city-selector-pill" id="citySelectorPill">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+              <span id="currentCityLabel">Tu Ubicación Actual</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+
+            <button class="locate-me-btn" id="btnLocateMe" title="Mi ubicación actual">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="22" y1="12" x2="18" y2="12"></line><line x1="6" y1="12" x2="2" y2="12"></line><line x1="12" y1="6" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="18"></line></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Fullscreen Interactive Map Container -->
+        <div id="interactivePassengerMap" class="full-map-layer"></div>
+
+        <!-- Bottom Sheet: Driver Options & Fare Confirmation (inDrive Style) -->
+        <div class="bottom-ride-sheet" id="rideBottomSheet">
+          <div class="sheet-drag-handle"></div>
+          
+          <div class="sheet-header-row">
+            <h3 class="sheet-title">Opciones de Viaje</h3>
+            <span class="sheet-badge-live">🟢 Caponeras activas</span>
+          </div>
+
+          <!-- Driver Bid Cards List -->
+          <div class="driver-options-list" id="driverOptionsList">
+            
+            <!-- Driver Card 1 -->
+            <div class="modern-driver-card active" data-fare="20" data-driver="Alex Mendoza">
+              <div class="driver-avatar-wrap">
+                <div class="driver-photo">👨🏽</div>
+                <span class="status-dot online"></span>
+              </div>
+              <div class="driver-meta">
+                <div class="driver-name-row">
+                  <h4 class="driver-name">Alex Mendoza</h4>
+                  <span class="driver-stars">⭐ 4.9</span>
+                </div>
+                <p class="driver-sub-info">Caponera #14 · <span class="eta-text">Tarifa Básica (3 min)</span></p>
+              </div>
+              <div class="driver-price-action">
+                <span class="fare-amount">C$ 20.00</span>
+                <button class="btn-accept-chip" onclick="selectDriverOption(this, 20, 'Alex Mendoza')">Elegir</button>
+              </div>
+            </div>
+
+            <!-- Driver Card 2 -->
+            <div class="modern-driver-card" data-fare="25" data-driver="María González">
+              <div class="driver-avatar-wrap">
+                <div class="driver-photo">👩🏻</div>
+                <span class="status-dot online"></span>
+              </div>
+              <div class="driver-meta">
+                <div class="driver-name-row">
+                  <h4 class="driver-name">María González</h4>
+                  <span class="driver-stars">⭐ 4.8</span>
+                </div>
+                <p class="driver-sub-info">Moto Taxi #09 · <span class="eta-text">5 min de ti</span></p>
+              </div>
+              <div class="driver-price-action">
+                <span class="fare-amount">C$ 25.00</span>
+                <button class="btn-accept-chip" onclick="selectDriverOption(this, 25, 'María González')">Elegir</button>
+              </div>
+            </div>
+
+            <!-- Driver Card 3 -->
+            <div class="modern-driver-card" data-fare="35" data-driver="Carlos Torrez">
+              <div class="driver-avatar-wrap">
+                <div class="driver-photo">🧔🏻</div>
+                <span class="status-dot online"></span>
+              </div>
+              <div class="driver-meta">
+                <div class="driver-name-row">
+                  <h4 class="driver-name">Carlos Torrez</h4>
+                  <span class="driver-stars">⭐ 5.0</span>
+                </div>
+                <p class="driver-sub-info">Caponera Ejecutiva · <span class="eta-text">Viaje Especial</span></p>
+              </div>
+              <div class="driver-price-action">
+                <span class="fare-amount">C$ 35.00</span>
+                <button class="btn-accept-chip" onclick="selectDriverOption(this, 35, 'Carlos Torrez')">Elegir</button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Quick Offer Adjuster -->
+          <div class="fare-negotiation-bar">
+            <span class="negotiation-label">Tarifa / Oferta:</span>
+            <div class="fare-chips-group">
+              <button class="chip-btn active" id="chipFareCurrent" onclick="adjustOffer(20)">C$ 20</button>
+              <button class="chip-btn" onclick="adjustOffer(25)">C$ 25</button>
+              <button class="chip-btn" onclick="adjustOffer(30)">C$ 30</button>
+              <button class="chip-btn" onclick="adjustOffer(35)">C$ 35</button>
+              <button class="chip-btn" onclick="adjustOffer(40)">C$ 40</button>
+              <button class="chip-btn" onclick="adjustOffer(50)">C$ 50</button>
+            </div>
+          </div>
+
+          <!-- Actions Buttons -->
+          <div class="sheet-cta-grid">
+            <button class="btn-neon-emerald" id="btnConfirmarPedido">
+              <span id="lblConfirmarPedido">⚡ Confirmar Viaje (C$ 20.00)</span>
+            </button>
+            
+            <button class="btn-whatsapp-direct" id="btnWhatsappDirect" title="Despachar viaje por WhatsApp">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+              <span>💬 Enviar Solicitud por WhatsApp</span>
+            </button>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- =========================================================
+           VIEW: SEARCH DESTINATION MODAL ("DETALLES DEL VIAJE")
+           ========================================================= -->
+      <section id="modalSearchAddress" class="search-modal-overlay">
+        <div class="search-modal-box">
+          
+          <div class="modal-search-header">
+            <button class="btn-close-search" id="btnCloseSearch" title="Volver al mapa">
+              ←
+            </button>
+            <h3 class="modal-title">Detalles del Viaje</h3>
+          </div>
+
+          <div class="search-inputs-wrap">
+            <div class="input-route-row">
+              <span class="route-pin start">📍</span>
+              <div class="input-field-group">
+                <label>Punto de partida o referencia</label>
+                <input type="text" id="inputModalOrigen" placeholder="Mi ubicación actual" value="Mi ubicación actual">
+              </div>
+            </div>
+
+            <div class="route-divider-line"></div>
+
+            <div class="input-route-row">
+              <span class="route-pin destination">🏁</span>
+              <div class="input-field-group">
+                <label>Dirección o Destino</label>
+                <input type="text" id="inputModalDestino" placeholder="¿A dónde te diriges? (ej. Parque Central, Mercado)" autofocus>
+              </div>
+            </div>
+          </div>
+
+          <div class="saved-places-quick">
+            <h4 class="section-micro-title">Destinos Populares</h4>
+            <div class="quick-place-item" onclick="setFastDestino('Mercado Municipal')">
+              <div class="place-icon">🏪</div>
+              <div class="place-info">
+                <strong>Mercado Municipal</strong>
+                <small>Zona Comercial</small>
+              </div>
+              <span class="quick-fare-badge">C$ 20</span>
+            </div>
+            
+            <div class="quick-place-item" onclick="setFastDestino('Parque Central')">
+              <div class="place-icon">🌳</div>
+              <div class="place-info">
+                <strong>Parque Central</strong>
+                <small>Centro de la Ciudad</small>
+              </div>
+              <span class="quick-fare-badge">C$ 15</span>
+            </div>
+
+            <div class="quick-place-item" onclick="setFastDestino('Terminal de Buses')">
+              <div class="place-icon">🚌</div>
+              <div class="place-info">
+                <strong>Terminal de Buses</strong>
+                <small>Salida Principal</small>
+              </div>
+              <span class="quick-fare-badge">C$ 25</span>
+            </div>
+          </div>
+
+          <!-- Bottom Pinned Action Button -->
+          <div class="modal-bottom-actions">
+            <button class="btn-confirm-route" id="btnAplicarRuta">
+              <span>Confirmar Ruta y Ver Caponeras 🛺</span>
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- =========================================================
+           VIEW: MODO CONDUCTOR / CAPONERO
+           ========================================================= -->
+      <section id="screenDriverMode" class="screen-view">
+        <div class="driver-hud-container">
+          
+          <div class="driver-hud-header">
+            <div class="driver-profile-mini">
+              <div class="hud-avatar">🛺</div>
+              <div>
+                <h4 id="driverNameDisplay">José Ramón</h4>
+                <small>Unidad #7 · Caponera Express</small>
+              </div>
+            </div>
+
+            <button class="driver-power-btn online" id="btnToggleDriverOnline">
+              <span class="power-dot"></span>
+              <span id="lblDriverStatus">EN LÍNEA</span>
+            </button>
+          </div>
+
+          <div class="driver-stats-grid">
+            <div class="stat-card">
+              <span class="stat-label">Viajes Hoy</span>
+              <span class="stat-value" id="hudViajesHoy">0</span>
+            </div>
+            <div class="stat-card highlight">
+              <span class="stat-label">Ganado Hoy</span>
+              <span class="stat-value" id="hudGanadoHoy">C$ 0.00</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Saldo Plan</span>
+              <span class="stat-value text-emerald">15 Días Gratis</span>
+            </div>
+          </div>
+
+          <!-- Plan Banner & Recharge Action -->
+          <div class="driver-plan-banner" onclick="openBanproModal()">
+            <div class="plan-banner-left">
+              <div class="plan-icon-tag">🏦</div>
+              <div>
+                <strong id="lblPlanStatus">Pionero: 15 Días Gratis Activos</strong>
+                <small>Recarga tu pase semanal por Banpro cuando desees</small>
+              </div>
+            </div>
+            <button class="btn-recharge-action">Recargar 💳</button>
+          </div>
+
+          <h4 class="feed-section-title">📡 Solicitudes en Tiempo Real (Radio 1.5 km)</h4>
+
+          <div class="driver-feed-list" id="driverRequestsFeed">
+            <!-- Dynamic requests -->
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+
+    <!-- =========================================================
+         BOTTOM NAVIGATION BAR (APP SHELL)
+         ========================================================= -->
+    <nav class="bottom-app-nav">
+      <button class="nav-item active" id="navHome" onclick="switchNav('home')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+        <span>Inicio</span>
+      </button>
+
+      <button class="nav-item" id="navMessages" onclick="switchNav('messages')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        <span>Mensajes</span>
+      </button>
+
+      <button class="nav-item" id="navOrders" onclick="switchNav('orders')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+        <span>Pedidos</span>
+      </button>
+
+      <button class="nav-item" id="navProfile" onclick="switchNav('driver')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        <span>Conducir</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- PWA Install Banner -->
+  <div id="pwaInstallBanner" class="pwa-install-banner">
+    <div class="pwa-banner-left">
+      <img src="icon-192.png" alt="Caponera App" class="pwa-banner-icon">
+      <div class="pwa-banner-text">
+        <span class="pwa-banner-title">Caponera App</span>
+        <span class="pwa-banner-sub">Instalar en pantalla de inicio</span>
+      </div>
+    </div>
+    <div class="pwa-banner-actions">
+      <button class="btn-pwa-install" id="btnTriggerInstall">Instalar 📲</button>
+      <button class="btn-pwa-dismiss" id="btnDismissBanner" title="Cerrar">&times;</button>
+    </div>
+  </div>
+
+  <!-- PWA Install Modal Guide (iOS / Manual Android) -->
+  <div id="installGuideModal" class="install-modal-overlay">
+    <div class="install-modal-card">
+      <img src="icon-192.png" alt="Caponera App" style="width:64px; height:64px; border-radius:14px; margin-bottom:8px; border:2px solid #f59e0b;">
+      <h3>Instalar Caponera App</h3>
+      <p>Sigue estos 2 sencillos pasos para tener la app en tu celular sin usar Play Store:</p>
+      
+      <div class="install-step-box">
+        <div class="install-step-num">1</div>
+        <div>Toca el menú de tu navegador (los <strong>3 puntos</strong> ⋮ arriba en Android, o el botón <strong>Compartir</strong> ⎋ abajo en iPhone).</div>
+      </div>
+
+      <div class="install-step-box">
+        <div class="install-step-num">2</div>
+        <div>Selecciona <strong>"Instalar aplicación"</strong> o <strong>"Agregar a la pantalla principal"</strong>.</div>
+      </div>
+
+      <button class="btn-neon-emerald w-full" style="margin-top:16px;" onclick="document.getElementById('installGuideModal').classList.remove('active')">
+        ¡Entendido! 👍
+      </button>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       MODAL DE PAGO Y RECARGA BANPRO (NICARAGUA)
+       ========================================================= -->
+  <div id="modalBanproRecharge" class="install-modal-overlay">
+    <div class="install-modal-card banpro-modal-card">
+      <div class="banpro-modal-header">
+        <div class="banpro-brand-row">
+          <span class="banpro-logo-badge">🏦 BANPRO</span>
+          <span class="banpro-nicaragua-flag">🇳🇮</span>
+        </div>
+        <button class="modal-close-icon" onclick="closeBanproModal()">&times;</button>
+      </div>
+
+      <h3>Recarga de Plan Conductor</h3>
+      <p class="banpro-sub">Elige tu plan y realiza tu depósito o transferencia directa:</p>
+
+      <!-- Selector de Planes -->
+      <div class="banpro-plans-grid">
+        <div class="banpro-plan-card active" id="planCardSemanal" onclick="selectBanproPlan(50, 'Semanal (7 Días)', this)">
+          <div class="plan-radio">✓ Seleccionado</div>
+          <div class="plan-text">
+            <strong>Plan Semanal</strong>
+            <small>7 Días completos · Ahorras C$ 20</small>
+          </div>
+          <span class="plan-price-tag">C$ 50</span>
+        </div>
+
+        <div class="banpro-plan-card" id="planCardDiario" onclick="selectBanproPlan(10, 'Pase Diario (24h)', this)">
+          <div class="plan-radio"></div>
+          <div class="plan-text">
+            <strong>Pase Diario</strong>
+            <small>Válido por 24 horas</small>
+          </div>
+          <span class="plan-price-tag">C$ 10</span>
+        </div>
+      </div>
+
+      <!-- Datos Bancarios Oficiales -->
+      <div class="banpro-account-box">
+        <div class="bank-data-row">
+          <span class="bank-label">Titular:</span>
+          <strong class="bank-val">Luis Mongrio</strong>
+        </div>
+
+        <div class="bank-data-row">
+          <span class="bank-label">Billetera Móvil:</span>
+          <div class="bank-copy-wrap">
+            <strong class="bank-val highlight">89130414</strong>
+            <button class="btn-copy-mini" onclick="copyBanproData('89130414', 'Número de Billetera Móvil copiado')">Copiar</button>
+          </div>
+        </div>
+
+        <div class="bank-data-row">
+          <span class="bank-label">Cuenta Córdobas:</span>
+          <div class="bank-copy-wrap">
+            <strong class="bank-val">10020110167728</strong>
+            <button class="btn-copy-mini" onclick="copyBanproData('10020110167728', 'Número de cuenta Banpro copiado')">Copiar</button>
+          </div>
+        </div>
+
+        <div class="bank-note">
+          📍 Paga en cualquier <strong>Agente Banpro</strong> (pulperías/farmacias del país) o desde tu app <strong>Banpro Móvil</strong>.
+        </div>
+      </div>
+
+      <!-- Input de comprobante -->
+      <div class="reference-input-wrap">
+        <label>Nº de Minuta o Referencia (opcional):</label>
+        <input type="text" id="inputBanproReferencia" placeholder="Ej. 10492839 o envía foto del recibo">
+      </div>
+
+      <!-- Botón WhatsApp -->
+      <button class="btn-whatsapp-direct w-full" style="margin-top:14px; padding:12px; font-weight:800;" onclick="enviarComprobanteBanpro()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg>
+        <span>📲 Enviar Comprobante por WhatsApp</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin></script>
+  
+  <!-- App JS (Cache-busted) -->
+  <script src="app.js?v=6"></script>
+
+</body>
+</html>

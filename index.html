@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#f59e0b" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+  <title>Caponera App 🛺 | Transporte y Mandados en Masaya</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  
+  <!-- Leaflet Map CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <style>
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 0.3; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .pulse-radar { animation: pulse-ring 2s infinite ease-in-out; }
+    ::-webkit-scrollbar { display: none; }
+    body { 
+      -webkit-tap-highlight-color: transparent; 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+    }
+    /* Estilo oscuro para mapa Leaflet */
+    .leaflet-tile { filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7); }
+    .leaflet-container { background: #0b1120 !important; font-family: inherit; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 flex justify-center min-h-screen select-none">
+
+  <!-- Contenedor móvil centralizado tipo PWA -->
+  <div class="w-full max-w-md bg-slate-950 flex flex-col min-h-screen border-x border-slate-800 shadow-2xl relative">
+
+    <!-- Header Principal -->
+    <header class="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 p-3.5 text-slate-950 flex justify-between items-center sticky top-0 z-40 shadow-lg">
+      <div class="flex items-center gap-2">
+        <div class="w-10 h-10 bg-slate-950 text-amber-400 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner border border-amber-400/30">
+          <i class="fa-solid fa-motorcycle"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <h1 class="font-black text-lg leading-tight tracking-tight">Caponera<span class="text-white">App</span></h1>
+            <span class="text-[9px] bg-slate-950 text-amber-300 font-extrabold px-1.5 py-0.5 rounded-md">PRO</span>
+          </div>
+          <p class="text-[10px] font-bold text-slate-900 flex items-center gap-1">
+            <span class="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span> Red Masaya &bull; En Vivo
+          </p>
+        </div>
+      </div>
+
+      <!-- Selector de Rol: Pasajero / Caponero -->
+      <div class="bg-slate-950/25 p-1 rounded-2xl flex text-xs font-black border border-slate-950/15">
+        <button id="btnRolePassenger" onclick="cambiarRol('pasajero')" class="px-3 py-1.5 rounded-xl bg-slate-950 text-amber-400 shadow-md transition-all">
+          <i class="fa-solid fa-user text-[11px] mr-1"></i>Pasajero
+        </button>
+        <button id="btnRoleDriver" onclick="cambiarRol('conductor')" class="px-3 py-1.5 rounded-xl text-slate-950 hover:text-white transition-all">
+          <i class="fa-solid fa-id-card text-[11px] mr-1"></i>Caponero
+        </button>
+      </div>
+    </header>
+
+    <!-- ============================================================== -->
+    <!-- VISTA 1: MODO PASAJERO                                         -->
+    <!-- ============================================================== -->
+    <main id="viewPassenger" class="flex-1 p-4 flex flex-col gap-4 overflow-y-auto pb-28">
+      
+      <!-- Mini Mapa Interactivo de Caponeras en Vivo -->
+      <div class="relative bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-inner">
+        <div id="map" class="w-full h-44 z-10"></div>
+        <div class="absolute bottom-2 left-2 z-20 bg-slate-950/90 backdrop-blur-md border border-slate-800 px-2.5 py-1 rounded-full flex items-center gap-2 text-[10px] text-slate-300 font-bold">
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+          <span id="mapCaponerasCount">3 mototaxis rastreadas cerca</span>
+        </div>
+        <button onclick="centrarUbicacion()" class="absolute top-2 right-2 z-20 w-8 h-8 rounded-xl bg-slate-950/90 border border-slate-800 text-amber-400 flex items-center justify-center hover:bg-slate-800 transition">
+          <i class="fa-solid fa-crosshairs text-xs"></i>
+        </button>
+      </div>
+
+      <!-- Selector de Tipo de Servicio -->
+      <div class="grid grid-cols-2 gap-3">
+        <button id="typeTrip" onclick="seleccionarTipoServicio('viaje')" class="p-3 rounded-2xl bg-amber-500 text-slate-950 font-black border border-amber-400 flex flex-col items-center gap-1.5 transition-all shadow-md active:scale-95">
+          <i class="fa-solid fa-person-walking-luggage text-lg"></i>
+          <span class="text-xs">Viaje Pasajero</span>
+        </button>
+        <button id="typeDelivery" onclick="seleccionarTipoServicio('mandado')" class="p-3 rounded-2xl bg-slate-900 text-slate-300 font-black border border-slate-800 flex flex-col items-center gap-1.5 hover:border-slate-700 transition-all active:scale-95">
+          <i class="fa-solid fa-box-open text-lg"></i>
+          <span class="text-xs">Mandado / Encomienda</span>
+        </button>
+      </div>
+
+      <!-- Formulario de Solicitud de Carrera -->
+      <div class="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col gap-3 shadow-md">
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">
+            <i class="fa-solid fa-circle-dot text-emerald-400 mr-1"></i> Punto de recogida (Origen)
+          </label>
+          <input id="inputOrigin" type="text" placeholder="Ej: Parque Central / Esquina Los Leones" value="Mercado Municipal de Masaya"
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 transition" />
+        </div>
+
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">
+            <i class="fa-solid fa-location-dot text-rose-500 mr-1"></i> Destino
+          </label>
+          <input id="inputDestination" type="text" placeholder="Ej: Barrio San Jerónimo / Shell" value="Las 7 Esquinas, Reparto San Juan"
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-amber-400 transition" />
+        </div>
+
+        <!-- Tarifa en Córdobas (Negociación Rápida) -->
+        <div class="pt-2 border-t border-slate-800/80">
+          <div class="flex justify-between items-center mb-1.5">
+            <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider">Tarifa Ofrecida (C$)</label>
+            <span class="text-[10px] text-amber-400 font-bold flex items-center gap-1">
+              <i class="fa-solid fa-money-bill-wave text-emerald-400"></i> Efectivo Directo
+            </span>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <button onclick="ajustarTarifa(-5)" class="w-11 h-11 rounded-2xl bg-slate-950 border border-slate-800 text-amber-400 font-black text-lg hover:bg-slate-800 active:scale-95 transition flex items-center justify-center">-</button>
+            <div class="flex-1 bg-slate-950 border border-slate-800 rounded-2xl px-3 py-2 flex items-center justify-center shadow-inner">
+              <span class="text-sm text-amber-400 font-extrabold mr-1">C$</span>
+              <input id="inputFare" type="number" value="30" class="w-20 bg-transparent text-center font-black text-xl text-white focus:outline-none" />
+            </div>
+            <button onclick="ajustarTarifa(5)" class="w-11 h-11 rounded-2xl bg-slate-950 border border-slate-800 text-amber-400 font-black text-lg hover:bg-slate-800 active:scale-95 transition flex items-center justify-center">+</button>
+          </div>
+
+          <!-- Botones de tarifa rápida local de Masaya -->
+          <div class="flex gap-2 mt-2">
+            <button onclick="fijarTarifa(20)" class="flex-1 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-bold text-slate-300 hover:border-amber-500/50 active:scale-95 transition">C$ 20</button>
+            <button onclick="fijarTarifa(30)" class="flex-1 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-bold text-slate-300 hover:border-amber-500/50 active:scale-95 transition">C$ 30</button>
+            <button onclick="fijarTarifa(40)" class="flex-1 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-bold text-slate-300 hover:border-amber-500/50 active:scale-95 transition">C$ 40</button>
+            <button onclick="fijarTarifa(50)" class="flex-1 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-bold text-slate-300 hover:border-amber-500/50 active:scale-95 transition">C$ 50</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">Nombre o quién viaja</label>
+          <input id="inputPassengerName" type="text" placeholder="Tu nombre" value="Luis Aguilar"
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-amber-400 transition" />
+        </div>
+
+        <!-- Botón Solicitar Caponera -->
+        <button id="btnRequestTrip" onclick="solicitarViaje()" class="w-full mt-1 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black py-3.5 rounded-2xl text-sm transition shadow-lg shadow-amber-500/25 active:scale-[0.98] flex items-center justify-center gap-2">
+          <i class="fa-solid fa-paper-plane"></i> PEDIR CAPONERA AHORA
+        </button>
+      </div>
+
+      <!-- Tarjeta de Estado del Pedido Activo (Oculta por defecto) -->
+      <div id="activeTripCard" class="hidden bg-slate-900 border-2 border-amber-500/70 p-4 rounded-3xl flex flex-col gap-3 relative overflow-hidden shadow-2xl animate-fade-in">
+        <div class="flex justify-between items-center">
+          <span id="tripStatusBadge" class="text-[11px] font-black px-3 py-1 rounded-full bg-amber-500 text-slate-950 flex items-center gap-1.5 shadow">
+            <span class="w-2 h-2 rounded-full bg-slate-950 animate-ping"></span> BUSCANDO CAPONERA
+          </span>
+          <button onclick="cancelarViaje()" class="text-xs text-rose-400 hover:text-rose-300 font-extrabold transition">Cancelar</button>
+        </div>
+
+        <!-- Radar de Búsqueda Animado -->
+        <div id="searchRadar" class="py-5 flex flex-col items-center justify-center gap-2.5">
+          <div class="w-20 h-20 rounded-full bg-amber-500/10 border-2 border-amber-500/40 flex items-center justify-center text-amber-400 text-2xl pulse-radar shadow-inner">
+            <i class="fa-solid fa-motorcycle"></i>
+          </div>
+          <p class="text-xs font-bold text-slate-300 text-center">Alertando a las caponeras más cercanas...</p>
+          <span class="text-[10px] text-slate-500">Sincronización en tiempo real vía SSE</span>
+        </div>
+
+        <!-- Datos del Conductor Asignado -->
+        <div id="driverDetails" class="hidden flex flex-col gap-3 pt-3 border-t border-slate-800">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 font-black text-2xl flex items-center justify-center shadow-lg">
+                <i class="fa-solid fa-user-ninja"></i>
+              </div>
+              <div>
+                <h4 id="driverName" class="font-extrabold text-sm text-white">José Ramón</h4>
+                <p id="driverUnit" class="text-xs text-amber-400 font-bold flex items-center gap-1">
+                  <i class="fa-solid fa-certificate"></i> Unidad #7 &bull; Caponera Express
+                </p>
+                <span class="text-[10px] text-slate-400">⭐ 4.9 &bull; Conductor Verificado</span>
+              </div>
+            </div>
+            <div class="text-right">
+              <span class="text-[10px] text-slate-400 block uppercase font-bold">Llega en</span>
+              <span id="etaTime" class="text-lg font-black text-emerald-400">3 min</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 mt-1">
+            <a id="waContactBtn" href="#" target="_blank" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-md active:scale-95">
+              <i class="fa-brands fa-whatsapp text-sm"></i> WhatsApp
+            </a>
+            <button onclick="simularFinalizar()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2.5 px-3 rounded-xl text-xs transition active:scale-95">
+              <i class="fa-solid fa-circle-check text-emerald-400 mr-1"></i> Completar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================== -->
+      <!-- SECCIÓN DE PUBLICIDAD MEJORADA Y DE ALTO ENGANCHE LOCAL         -->
+      <!-- ============================================================== -->
+      <section class="mt-2 flex flex-col gap-3">
+        <div class="flex justify-between items-center px-1">
+          <h3 class="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-fire text-rose-500"></i> Ofertas & Comercios de Masaya
+          </h3>
+          <span class="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 font-bold px-2 py-0.5 rounded-full">Patrocinados</span>
+        </div>
+
+        <!-- Carrusel / Tarjetas de Anuncios Patrocinados -->
+        <div class="flex flex-col gap-3">
+
+          <!-- ANUNCIO VIP #1: NEGOCIO DE LUIS - POLARIZADO Y FOCOS CON POLÍMERO -->
+          <div class="bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/60 border-2 border-amber-400 p-4 rounded-3xl flex flex-col gap-2.5 relative overflow-hidden shadow-2xl group hover:border-amber-300 transition-all">
+            <div class="absolute -top-6 -right-6 w-24 h-24 bg-amber-500/15 rounded-full blur-xl pointer-events-none"></div>
+            
+            <div class="flex justify-between items-start">
+              <div class="flex items-center gap-2.5">
+                <span class="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 flex items-center justify-center text-lg font-black shadow-md border border-amber-300">
+                  <i class="fa-solid fa-car-side"></i>
+                </span>
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <h4 class="font-black text-sm text-white">Polarizados & Focos Pro</h4>
+                    <span class="text-[9px] bg-amber-500 text-slate-950 font-black px-1.5 py-0.2 rounded-md">VIP</span>
+                  </div>
+                  <span class="text-[10px] text-amber-400 font-bold">Servicio Especializado Automotriz &bull; Masaya</span>
+                </div>
+              </div>
+              <span class="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-500/40 font-black px-2 py-0.5 rounded-full">GARANTÍA TOTAL</span>
+            </div>
+            
+            <p class="text-xs text-slate-200 leading-snug">
+              🚗 <strong class="text-white">Polarizado de Autos:</strong> Máxima protección solar UV, privacidad y reducción de calor para tu vehículo.<br/>
+              💡 <strong class="text-amber-300">Restauración de Focos con Polímero a Vapor:</strong> ¡Elimina lo amarillo y opaco! Focos 100% cristalinos como nuevos de paquete con acabado óptico duradero.
+            </p>
+
+            <div class="flex items-center justify-between pt-2 border-t border-slate-800/90 mt-1">
+              <span class="text-[10px] text-slate-400 font-bold">Promo: <strong class="text-emerald-400">Precio Especial CaponeraApp</strong></span>
+              <a href="https://wa.me/50589130414?text=Hola%20Luis,%20vi%20tu%20anuncio%20en%20CaponeraApp.%20Quiero%20cotizar%20polarizado%20y%20restauraci%C3%B3n%20de%20focos%20para%20mi%20veh%C3%ADculo." target="_blank"
+                class="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs px-3.5 py-2 rounded-xl transition shadow-lg flex items-center gap-1.5 active:scale-95">
+                <i class="fa-brands fa-whatsapp text-sm"></i> Cotizar por WhatsApp
+              </a>
+            </div>
+          </div>
+          
+          <!-- Anuncio 1: Fritanga / Comidería Doña Tania -->
+          <div class="bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/40 border border-amber-500/30 p-3.5 rounded-3xl flex flex-col gap-2 relative overflow-hidden shadow-lg group hover:border-amber-400/60 transition-all">
+            <div class="flex justify-between items-start">
+              <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-sm font-black border border-rose-500/30">
+                  <i class="fa-solid fa-utensils"></i>
+                </span>
+                <div>
+                  <h4 class="font-extrabold text-xs text-white">Comidería & Fritanga Doña Tania</h4>
+                  <span class="text-[10px] text-amber-400 font-semibold">Parque Central &bull; ⭐ 4.9 (350+ reviews)</span>
+                </div>
+              </div>
+              <span class="text-[9px] bg-rose-950 text-rose-300 border border-rose-500/40 font-black px-2 py-0.5 rounded-full">15% OFF</span>
+            </div>
+            
+            <p class="text-xs text-slate-300 leading-snug">
+              ¡El mejor Vigorón Mixto y Fritanga de Masaya! Muestra tu viaje en <strong class="text-amber-400">CaponeraApp</strong> y recibe 15% de descuento en tu almuerzo o cena.
+            </p>
+
+            <div class="flex items-center justify-between pt-1 border-t border-slate-800/80 mt-1">
+              <span class="text-[10px] text-slate-400 font-medium">Cupón: <strong class="text-white bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">CAPONERA15</strong></span>
+              <a href="https://wa.me/50588889999?text=Hola%20Dona%20Tania,%20vi%20su%20anuncio%20en%20CaponeraApp%20y%20quiero%20hacer%20un%20pedido%20con%20el%2015%25%20de%20descuento" target="_blank"
+                class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[11px] px-3 py-1.5 rounded-xl transition shadow flex items-center gap-1 active:scale-95">
+                <i class="fa-brands fa-whatsapp"></i> Pedir por WhatsApp
+              </a>
+            </div>
+          </div>
+
+          <!-- Anuncio 2: Taller de Motos & Repuestos El Chele -->
+          <div class="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 border border-indigo-500/30 p-3.5 rounded-3xl flex flex-col gap-2 relative overflow-hidden shadow-lg group hover:border-indigo-400/60 transition-all">
+            <div class="flex justify-between items-start">
+              <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-sm font-black border border-indigo-500/30">
+                  <i class="fa-solid fa-wrench"></i>
+                </span>
+                <div>
+                  <h4 class="font-extrabold text-xs text-white">Taller de Motos El Chele</h4>
+                  <span class="text-[10px] text-indigo-400 font-semibold">San Jerónimo &bull; Especialistas en Caponeras</span>
+                </div>
+              </div>
+              <span class="text-[9px] bg-indigo-950 text-indigo-300 border border-indigo-500/40 font-black px-2 py-0.5 rounded-full">PROMO C$120</span>
+            </div>
+            
+            <p class="text-xs text-slate-300 leading-snug">
+              Cambio de aceite, ajuste de frenos y revisión de luces express. Si eres caponero o cliente de la red, recibes revisión gratuita de llantas.
+            </p>
+
+            <div class="flex items-center justify-between pt-1 border-t border-slate-800/80 mt-1">
+              <span class="text-[10px] text-slate-400">Atención rápida en Masaya</span>
+              <a href="tel:50588887777" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-[11px] px-3 py-1.5 rounded-xl transition shadow flex items-center gap-1 active:scale-95">
+                <i class="fa-solid fa-phone"></i> Llamar al Taller
+              </a>
+            </div>
+          </div>
+
+          <!-- Anuncio 3: Farmacia San Jerónimo (Servicio a Domicilio 24/7) -->
+          <div class="bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/40 border border-emerald-500/30 p-3.5 rounded-3xl flex flex-col gap-2 relative overflow-hidden shadow-lg group hover:border-emerald-400/60 transition-all">
+            <div class="flex justify-between items-start">
+              <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm font-black border border-emerald-500/30">
+                  <i class="fa-solid fa-prescription-bottle-medical"></i>
+                </span>
+                <div>
+                  <h4 class="font-extrabold text-xs text-white">Farmacia San Jerónimo 24/7</h4>
+                  <span class="text-[10px] text-emerald-400 font-semibold">Envío a Domicilio Inmediato</span>
+                </div>
+              </div>
+              <span class="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-500/40 font-black px-2 py-0.5 rounded-full">ABIERTO</span>
+            </div>
+            
+            <p class="text-xs text-slate-300 leading-snug">
+              ¿Necesitas medicamentos urgentes? Envía tu receta por WhatsApp y tu caponero te la entrega directamente en tu puerta.
+            </p>
+
+            <div class="flex items-center justify-between pt-1 border-t border-slate-800/80 mt-1">
+              <span class="text-[10px] text-slate-400">Entrega rápida en Masaya</span>
+              <a href="https://wa.me/50588886666?text=Hola%20Farmacia%20San%20Jeronimo,%20deseo%20cotizar%20un%20medicamento%20visto%20en%20CaponeraApp" target="_blank"
+                class="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] px-3 py-1.5 rounded-xl transition shadow flex items-center gap-1 active:scale-95">
+                <i class="fa-brands fa-whatsapp"></i> Cotizar Receta
+              </a>
+            </div>
+          </div>
+
+          <!-- Banner VIP: Tu Canal de Monetización Publicitaria -->
+          <div class="bg-gradient-to-r from-amber-500/20 via-yellow-500/10 to-amber-500/20 border-2 border-dashed border-amber-400/50 p-4 rounded-3xl flex flex-col items-center text-center gap-2 shadow-xl">
+            <div class="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-lg shadow-md">
+              <i class="fa-solid fa-bullhorn"></i>
+            </div>
+            <h4 class="font-black text-sm text-white">¿Tienes un negocio o pulpería en Masaya?</h4>
+            <p class="text-xs text-slate-300 leading-tight">
+              Llega a miles de pasajeros y caponeros activos todos los días. Anúnciate aquí por solo <strong class="text-amber-400">C$ 150 córdobas al mes</strong>.
+            </p>
+            <a href="https://wa.me/50589130414?text=Hola%20Luis,%20quiero%20anunciar%20mi%20negocio%20en%20CaponeraApp%20por%20C$%20150" target="_blank"
+              class="w-full mt-1 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black py-2.5 rounded-xl text-xs shadow-lg transition active:scale-95 flex items-center justify-center gap-1.5">
+              <i class="fa-brands fa-whatsapp text-sm"></i> PAUTAR MI NEGOCIO AHORA
+            </a>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Footer Legal & Transparencia -->
+      <footer class="pt-3 pb-1 text-center text-[10px] text-slate-500 flex flex-col items-center gap-1.5 border-t border-slate-900 mt-2">
+        <div class="flex items-center gap-2.5">
+          <button onclick="mostrarPrivacidad()" class="text-slate-400 hover:text-amber-400 transition underline underline-offset-2">Política de Privacidad</button>
+          <span>&bull;</span>
+          <button onclick="mostrarPrivacidad()" class="text-slate-400 hover:text-amber-400 transition underline underline-offset-2">Términos de Uso</button>
+          <span>&bull;</span>
+          <a href="/privacidad.html" target="_blank" class="text-slate-400 hover:text-amber-400 transition underline underline-offset-2">Ley 787</a>
+        </div>
+        <p class="text-slate-600 text-[9px]">© 2026 Caponera App &bull; Masaya, Nicaragua. Plataforma comunitaria protegida.</p>
+      </footer>
+
+    </main>
+
+    <!-- ============================================================== -->
+    <!-- VISTA 2: MODO CAPONERO / CONDUCTOR                             -->
+    <!-- ============================================================== -->
+    <main id="viewDriver" class="hidden flex-1 p-4 flex flex-col gap-4 overflow-y-auto pb-28">
+      
+      <!-- Switch Disponibilidad & Ganancias -->
+      <div class="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col gap-3 shadow-md">
+        <div class="flex justify-between items-center">
+          <div>
+            <h3 class="font-black text-sm text-white flex items-center gap-1.5">
+              <i class="fa-solid fa-motorcycle text-amber-400"></i> Mi Unidad #7
+            </h3>
+            <p class="text-xs text-slate-400">José Ramón (Caponera Express)</p>
+          </div>
+          <button id="btnToggleDriverStatus" onclick="toggleDisponibilidad()" class="px-3.5 py-1.5 rounded-full text-xs font-black bg-emerald-500 text-slate-950 flex items-center gap-1.5 shadow-md active:scale-95 transition">
+            <span class="w-2 h-2 rounded-full bg-slate-950"></span> DISPONIBLE
+          </button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 pt-3 border-t border-slate-800">
+          <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800/80 shadow-inner">
+            <span class="text-[10px] text-slate-400 uppercase font-black">Ganado Hoy</span>
+            <div class="text-lg font-black text-emerald-400">C$ 380</div>
+          </div>
+          <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800/80 shadow-inner">
+            <span class="text-[10px] text-slate-400 uppercase font-black">Carreras Hechas</span>
+            <div class="text-lg font-black text-amber-400">12 viajes</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feed de Solicitudes Disponibles en Masaya -->
+      <div>
+        <div class="flex justify-between items-center mb-2 px-1">
+          <h3 class="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Viajes Solicitados en Masaya
+          </h3>
+          <span id="requestsCount" class="text-[10px] bg-slate-900 border border-slate-800 text-amber-400 font-bold px-2 py-0.5 rounded-full">Sincronizando...</span>
+        </div>
+
+        <!-- Lista Dinámica de Viajes -->
+        <div id="driverFeed" class="flex flex-col gap-3">
+          <!-- Inyectado dinámicamente -->
+        </div>
+      </div>
+    </main>
+
+    <!-- Navegación Inferior Móvil -->
+    <nav class="bg-slate-950/95 backdrop-blur-md border-t border-slate-800 p-2.5 flex justify-around items-center sticky bottom-0 z-40">
+      <button onclick="cambiarRol('pasajero')" class="flex flex-col items-center text-xs font-extrabold text-amber-400 hover:text-amber-300 active:scale-95 transition">
+        <i class="fa-solid fa-map-location-dot text-base mb-1"></i>
+        <span>Pedir</span>
+      </button>
+      <button onclick="cambiarRol('conductor')" class="flex flex-col items-center text-xs font-extrabold text-slate-400 hover:text-amber-400 active:scale-95 transition">
+        <i class="fa-solid fa-route text-base mb-1"></i>
+        <span>Caponero</span>
+      </button>
+      <button onclick="mostrarTarifario()" class="flex flex-col items-center text-xs font-extrabold text-slate-400 hover:text-amber-400 active:scale-95 transition">
+        <i class="fa-solid fa-tags text-base mb-1"></i>
+        <span>Tarifas</span>
+      </button>
+      <button onclick="mostrarPrivacidad()" class="flex flex-col items-center text-xs font-extrabold text-slate-400 hover:text-emerald-400 active:scale-95 transition">
+        <i class="fa-solid fa-shield-halved text-base mb-1"></i>
+        <span>Legal</span>
+      </button>
+    </nav>
+
+    <!-- Modal Tarifario Local de Referencia -->
+    <div id="fareModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+      <div class="bg-slate-900 border border-slate-800 w-full max-w-xs rounded-3xl p-5 shadow-2xl flex flex-col gap-3">
+        <h3 class="font-black text-sm text-amber-400 flex items-center gap-2">
+          <i class="fa-solid fa-circle-info"></i> Tarifas Sugeridas en Masaya
+        </h3>
+        <p class="text-[11px] text-slate-400">Precios promedio para evitar cobros excesivos:</p>
+        <ul class="text-xs text-slate-300 flex flex-col gap-2.5 divide-y divide-slate-800">
+          <li class="pt-2 flex justify-between"><span>Casco Urbano / Centro:</span> <strong class="text-white">C$ 20 - 30</strong></li>
+          <li class="pt-2 flex justify-between"><span>Hacia Barrios / Repartos:</span> <strong class="text-white">C$ 30 - 40</strong></li>
+          <li class="pt-2 flex justify-between"><span>Comarcas / Distancias largas:</span> <strong class="text-white">C$ 50 - 70</strong></li>
+          <li class="pt-2 flex justify-between"><span>Mandados / Encomiendas:</span> <strong class="text-white">C$ 35 - 50</strong></li>
+        </ul>
+        <button onclick="ocultarTarifario()" class="w-full mt-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl text-xs transition active:scale-95">¡Entendido!</button>
+      </div>
+    </div>
+
+    <!-- Modal de Privacidad, Permisos y Cumplimiento Legal (Ley 787) -->
+    <div id="privacyModal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
+      <div class="bg-slate-900 border border-slate-800 w-full max-w-sm rounded-3xl p-5 shadow-2xl flex flex-col gap-3.5 max-h-[85vh] overflow-y-auto">
+        <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2">
+            <span class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm font-black border border-emerald-500/30">
+              <i class="fa-solid fa-shield-halved"></i>
+            </span>
+            <div>
+              <h3 class="font-black text-sm text-white">Privacidad y Legal</h3>
+              <p class="text-[10px] text-slate-400 font-mono">Ley 787 &bull; Caponera App Masaya</p>
+            </div>
+          </div>
+          <button onclick="ocultarPrivacidad()" class="w-7 h-7 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div class="space-y-3 text-xs text-slate-300 leading-relaxed">
+          <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800/80">
+            <h4 class="font-bold text-emerald-400 flex items-center gap-1.5 mb-1 text-[11px]">
+              <i class="fa-solid fa-location-crosshairs"></i> 1. Permiso de Ubicación (GPS)
+            </h4>
+            <p class="text-[11px] text-slate-400">
+              Tu ubicación se solicita <strong>únicamente en tiempo real</strong> para centrar el mapa y ubicar tu punto de recogida en Masaya. No registramos rutas personales en segundo plano ni monitoreamos tu teléfono fuera de la app.
+            </p>
+          </div>
+
+          <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800/80">
+            <h4 class="font-bold text-amber-400 flex items-center gap-1.5 mb-1 text-[11px]">
+              <i class="fa-brands fa-whatsapp"></i> 2. Teléfono y Coordinación Directa
+            </h4>
+            <p class="text-[11px] text-slate-400">
+              El número de WhatsApp o nombre ingresado se utiliza estrictamente para permitir la comunicación directa entre pasajero y caponero. <strong>Jamás vendemos ni compartimos tus datos</strong> con agencias de publicidad o bases de datos comerciales.
+            </p>
+          </div>
+
+          <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800/80">
+            <h4 class="font-bold text-cyan-400 flex items-center gap-1.5 mb-1 text-[11px]">
+              <i class="fa-solid fa-handshake"></i> 3. Naturaleza Comunitaria y Exoneración
+            </h4>
+            <p class="text-[11px] text-slate-400">
+              Caponera App es una herramienta tecnológica comunitaria de enlace directo entre usuarios y conductores locales independientes. No somos empresa de transporte ni cobramos comisiones obligatorias; los acuerdos y tarifas son pactados libremente entre las partes.
+            </p>
+          </div>
+
+          <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800/80">
+            <h4 class="font-bold text-indigo-400 flex items-center gap-1.5 mb-1 text-[11px]">
+              <i class="fa-solid fa-scale-balanced"></i> 4. Cumplimiento Ley 787 de Nicaragua
+            </h4>
+            <p class="text-[11px] text-slate-400">
+              Garantizamos el pleno ejercicio de tus derechos de acceso, rectificación y eliminación de datos. Puedes consultar la política completa en <a href="/privacidad.html" target="_blank" class="text-amber-400 underline">privacidad.html</a>.
+            </p>
+          </div>
+        </div>
+
+        <button onclick="ocultarPrivacidad()" class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-2.5 rounded-xl text-xs transition active:scale-95 shadow">
+          Entendido y Acepto
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- JAVASCRIPT: LÓGICA DE INTERFAZ & CONEXIÓN API                  -->
+  <!-- ============================================================== -->
+  <script>
+    // Coordenadas Masaya Central
+    const MASAYA_COORDS = [12.1364, -86.2514];
+    let mapInstance = null;
+    let userMarker = null;
+    let driverMarkers = [];
+
+    let estado = {
+      rolActual: 'pasajero',
+      tipoServicio: 'viaje',
+      tarifa: 30,
+      conductorDisponible: true,
+      viajeActivoId: null,
+      viajesDisponibles: [
+        {
+          id: 101,
+          pasajero_nombre: 'Doña Martha López',
+          origen: 'Parque San Jerónimo',
+          destino: 'Hospital Humberto Alvarado',
+          tarifa: 35,
+          tipo: 'viaje',
+          tiempo: 'Hace 2 min'
+        },
+        {
+          id: 102,
+          pasajero_nombre: 'Taller El Chelito',
+          origen: 'Calle Central',
+          destino: 'Repuestos Masaya (Mandado)',
+          tarifa: 45,
+          tipo: 'mandado',
+          tiempo: 'Hace 4 min'
+        }
+      ]
+    };
+
+    // Inicializar Mapa Leaflet
+    function initMap() {
+      if (mapInstance) return;
+      try {
+        mapInstance = L.map('map', {
+          center: MASAYA_COORDS,
+          zoom: 14,
+          zoomControl: false,
+          attributionControl: false
+        });
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 18
+        }).addTo(mapInstance);
+
+        // Icono Personalizado Caponera
+        const caponeraIcon = L.divIcon({
+          className: 'custom-caponera-icon',
+          html: `<div style="background:#f59e0b; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#020617; font-size:12px; border:2px solid #fff; box-shadow:0 0 10px rgba(245,158,11,0.8);"><i class="fa-solid fa-motorcycle"></i></div>`,
+          iconSize: [26, 26],
+          iconAnchor: [13, 13]
+        });
+
+        // Marcadores de Caponeras en Vivo
+        const mockPositions = [
+          [12.1375, -86.2525],
+          [12.1350, -86.2500],
+          [12.1380, -86.2480]
+        ];
+
+        mockPositions.forEach(pos => {
+          const m = L.marker(pos, { icon: caponeraIcon }).addTo(mapInstance);
+          driverMarkers.push(m);
+        });
+
+        // Marcador Usuario
+        const userIcon = L.divIcon({
+          className: 'user-pin-icon',
+          html: `<div style="background:#10b981; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-size:10px; border:2px solid #fff; box-shadow:0 0 10px rgba(16,185,129,0.8);"><i class="fa-solid fa-location-dot"></i></div>`,
+          iconSize: [22, 22],
+          iconAnchor: [11, 11]
+        });
+        userMarker = L.marker(MASAYA_COORDS, { icon: userIcon }).addTo(mapInstance);
+
+      } catch (err) {
+        console.log("Leaflet map offline o error:", err);
+      }
+    }
+
+    function centrarUbicacion() {
+      if (mapInstance && userMarker) {
+        mapInstance.setView(userMarker.getLatLng(), 15);
+      }
+    }
+
+    function cambiarRol(rol) {
+      estado.rolActual = rol;
+      const viewPasajero = document.getElementById('viewPassenger');
+      const viewConductor = document.getElementById('viewDriver');
+      const btnPasajero = document.getElementById('btnRolePassenger');
+      const btnConductor = document.getElementById('btnRoleDriver');
+
+      if (rol === 'pasajero') {
+        viewPasajero.classList.remove('hidden');
+        viewConductor.classList.add('hidden');
+        btnPasajero.className = 'px-3 py-1.5 rounded-xl bg-slate-950 text-amber-400 shadow-md transition-all';
+        btnConductor.className = 'px-3 py-1.5 rounded-xl text-slate-950 hover:text-white transition-all';
+        setTimeout(() => { if (mapInstance) mapInstance.invalidateSize(); }, 200);
+      } else {
+        viewPasajero.classList.add('hidden');
+        viewConductor.classList.remove('hidden');
+        btnConductor.className = 'px-3 py-1.5 rounded-xl bg-slate-950 text-amber-400 shadow-md transition-all';
+        btnPasajero.className = 'px-3 py-1.5 rounded-xl text-slate-950 hover:text-white transition-all';
+        cargarFeedConductor();
+      }
+    }
+
+    function seleccionarTipoServicio(tipo) {
+      estado.tipoServicio = tipo;
+      const bTrip = document.getElementById('typeTrip');
+      const bDel = document.getElementById('typeDelivery');
+      if (tipo === 'viaje') {
+        bTrip.className = 'p-3 rounded-2xl bg-amber-500 text-slate-950 font-black border border-amber-400 flex flex-col items-center gap-1.5 transition-all shadow-md active:scale-95';
+        bDel.className = 'p-3 rounded-2xl bg-slate-900 text-slate-300 font-black border border-slate-800 flex flex-col items-center gap-1.5 hover:border-slate-700 transition-all active:scale-95';
+      } else {
+        bDel.className = 'p-3 rounded-2xl bg-amber-500 text-slate-950 font-black border border-amber-400 flex flex-col items-center gap-1.5 transition-all shadow-md active:scale-95';
+        bTrip.className = 'p-3 rounded-2xl bg-slate-900 text-slate-300 font-black border border-slate-800 flex flex-col items-center gap-1.5 hover:border-slate-700 transition-all active:scale-95';
+      }
+    }
+
+    function ajustarTarifa(delta) {
+      const input = document.getElementById('inputFare');
+      let valor = parseInt(input.value) || 20;
+      valor = Math.max(15, valor + delta);
+      input.value = valor;
+      estado.tarifa = valor;
+    }
+
+    function fijarTarifa(valor) {
+      document.getElementById('inputFare').value = valor;
+      estado.tarifa = valor;
+    }
+
+    async function solicitarViaje() {
+      const origen = document.getElementById('inputOrigin').value.trim();
+      const destino = document.getElementById('inputDestination').value.trim();
+      const cliente = document.getElementById('inputPassengerName').value.trim() || 'Pasajero Express';
+      const tarifa = parseInt(document.getElementById('inputFare').value) || 30;
+
+      if (!origen || !destino) {
+        alert('Por favor ingresa origen y destino.');
+        return;
+      }
+
+      const card = document.getElementById('activeTripCard');
+      const radar = document.getElementById('searchRadar');
+      const details = document.getElementById('driverDetails');
+      const badge = document.getElementById('tripStatusBadge');
+
+      card.classList.remove('hidden');
+      radar.classList.remove('hidden');
+      details.classList.add('hidden');
+      badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-950 animate-ping"></span> BUSCANDO CAPONERA`;
+      badge.className = 'text-[11px] font-black px-3 py-1 rounded-full bg-amber-500 text-slate-950 flex items-center gap-1.5 shadow';
+
+      // Intento de conexión con el backend de Python SQLite
+      try {
+        const resp = await fetch('/api/viajes/solicitar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pasajero_nombre: cliente,
+            origen: origen,
+            destino: destino,
+            tarifa: tarifa,
+            lat: MASAYA_COORDS[0],
+            lng: MASAYA_COORDS[1]
+          })
+        });
+        const resData = await resp.json();
+        if (resData.success) {
+          estado.viajeActivoId = resData.viaje_id;
+        }
+      } catch (e) {
+        console.log("Modo local/simulado activo:", e);
+      }
+
+      // Añadir a lista de conductor local
+      const nuevoViaje = {
+        id: estado.viajeActivoId || ('CP-' + Math.floor(100 + Math.random() * 900)),
+        pasajero_nombre: cliente,
+        origen: origen,
+        destino: destino,
+        tarifa: tarifa,
+        tipo: estado.tipoServicio,
+        tiempo: 'Ahora mismo'
+      };
+      estado.viajesDisponibles.unshift(nuevoViaje);
+
+      // Simulación o confirmación de asignación
+      setTimeout(() => {
+        if (card.classList.contains('hidden')) return;
+        radar.classList.add('hidden');
+        details.classList.remove('hidden');
+        badge.innerHTML = `<i class="fa-solid fa-check"></i> CAPONERA ASIGNADA`;
+        badge.className = 'text-[11px] font-black px-3 py-1 rounded-full bg-emerald-500 text-slate-950 flex items-center gap-1.5 shadow';
+        
+        document.getElementById('driverName').innerText = "José Ramón";
+        document.getElementById('driverUnit').innerText = "Unidad #7 · Caponera Express";
+        
+        const waMsg = encodeURIComponent(`Hola José Ramón, soy ${cliente}, pedí su caponera desde ${origen} hacia ${destino}.`);
+        document.getElementById('waContactBtn').href = `https://wa.me/50589130414?text=${waMsg}`;
+      }, 3500);
+    }
+
+    async function cancelarViaje() {
+      if (estado.viajeActivoId) {
+        try {
+          await fetch(`/api/viajes/${estado.viajeActivoId}/cancelar`, { method: 'POST' });
+        } catch(e){}
+      }
+      document.getElementById('activeTripCard').classList.add('hidden');
+    }
+
+    function simularFinalizar() {
+      alert('¡Viaje completado con éxito! Gracias por usar CaponeraApp.');
+      cancelarViaje();
+    }
+
+    function toggleDisponibilidad() {
+      estado.conductorDisponible = !estado.conductorDisponible;
+      const btn = document.getElementById('btnToggleDriverStatus');
+      if (estado.conductorDisponible) {
+        btn.className = 'px-3.5 py-1.5 rounded-full text-xs font-black bg-emerald-500 text-slate-950 flex items-center gap-1.5 shadow-md active:scale-95 transition';
+        btn.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-950"></span> DISPONIBLE`;
+      } else {
+        btn.className = 'px-3.5 py-1.5 rounded-full text-xs font-black bg-slate-700 text-slate-300 flex items-center gap-1.5 shadow-md active:scale-95 transition';
+        btn.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-500"></span> FUERA DE SERVICIO`;
+      }
+    }
+
+    async function cargarFeedConductor() {
+      const feed = document.getElementById('driverFeed');
+      const counter = document.getElementById('requestsCount');
+      
+      // Intentar traer del backend
+      try {
+        const resp = await fetch('/api/conductor/viajes_pendientes');
+        const data = await resp.json();
+        if (data.carreras && data.carreras.length > 0) {
+          estado.viajesDisponibles = data.carreras;
+        }
+      } catch(e) {}
+
+      feed.innerHTML = '';
+      counter.innerText = `${estado.viajesDisponibles.length} pedidos`;
+
+      if (estado.viajesDisponibles.length === 0) {
+        feed.innerHTML = `
+          <div class="p-6 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-3xl">
+            No hay solicitudes activas en este momento en Masaya.
+          </div>`;
+        return;
+      }
+
+      estado.viajesDisponibles.forEach((v, index) => {
+        const item = document.createElement('div');
+        item.className = 'bg-slate-900 border border-slate-800 p-3.5 rounded-3xl flex flex-col gap-2.5 shadow-md';
+        const tipoLabel = v.tipo === 'mandado' ? 'Mandado' : 'Pasajero';
+        const tipoBadgeClass = v.tipo === 'mandado' ? 'bg-indigo-950 text-indigo-400 border border-indigo-500/30' : 'bg-amber-950 text-amber-400 border border-amber-500/30';
+
+        item.innerHTML = `
+          <div class="flex justify-between items-start">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-black text-white">${v.pasajero_nombre || v.cliente || 'Pasajero'}</span>
+              <span class="text-[9px] font-black px-2 py-0.5 rounded-full ${tipoBadgeClass}">
+                ${tipoLabel}
+              </span>
+            </div>
+            <div class="text-right">
+              <span class="text-sm font-black text-emerald-400">C$ ${v.tarifa}</span>
+              <span class="text-[9px] text-slate-500 block">${v.tiempo || 'Reciente'}</span>
+            </div>
+          </div>
+
+          <div class="text-xs text-slate-300 flex flex-col gap-1 pl-1">
+            <div class="flex items-center gap-1.5">
+              <i class="fa-solid fa-circle-dot text-[10px] text-emerald-400"></i>
+              <span class="truncate">${v.origen}</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <i class="fa-solid fa-location-dot text-[10px] text-rose-500"></i>
+              <span class="truncate">${v.destino}</span>
+            </div>
+          </div>
+
+          <div class="flex gap-2 pt-2 border-t border-slate-800/80">
+            <button onclick="aceptarViajeConductor(${index})" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2 rounded-xl text-xs transition shadow active:scale-95">
+              Aceptar Carrera
+            </button>
+            <button onclick="descartarViaje(${index})" class="px-3.5 bg-slate-950 border border-slate-800 text-slate-400 hover:text-white rounded-xl text-xs transition active:scale-95">
+              Ignorar
+            </button>
+          </div>
+        `;
+        feed.appendChild(item);
+      });
+    }
+
+    async function aceptarViajeConductor(index) {
+      const v = estado.viajesDisponibles[index];
+      if (v.id) {
+        try {
+          await fetch(`/api/viajes/${v.id}/aceptar`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ conductor_id: 1 })
+          });
+        } catch(e) {}
+      }
+      alert(`¡Carrera aceptada para ${v.pasajero_nombre || v.cliente}! Dirígete a: ${v.origen}. Tarifa: C$ ${v.tarifa}`);
+      estado.viajesDisponibles.splice(index, 1);
+      cargarFeedConductor();
+    }
+
+    function descartarViaje(index) {
+      estado.viajesDisponibles.splice(index, 1);
+      cargarFeedConductor();
+    }
+
+    function mostrarTarifario() {
+      document.getElementById('fareModal').classList.remove('hidden');
+    }
+
+    function ocultarTarifario() {
+      document.getElementById('fareModal').classList.add('hidden');
+    }
+
+    function mostrarPrivacidad() {
+      document.getElementById('privacyModal').classList.remove('hidden');
+    }
+
+    function ocultarPrivacidad() {
+      document.getElementById('privacyModal').classList.add('hidden');
+    }
+
+    // Inicializar al cargar
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+    });
+  </script>
+</body>
+</html>
