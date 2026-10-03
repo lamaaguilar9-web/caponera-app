@@ -105,28 +105,33 @@ function renderDriversOnMap(drivers) {
 
   const listContainer = document.getElementById('driverOptionsList');
   if (listContainer && drivers.length > 0) {
-    listContainer.innerHTML = drivers.map((d, idx) => `
-      <div class="modern-driver-card ${idx === 0 ? 'active' : ''}" data-fare="${20 + idx * 5}" data-driver="${d.name}">
+    listContainer.innerHTML = drivers.map((d, idx) => {
+      const driverName = d.nombre || d.name || 'Conductor';
+      const driverUnit = d.unidad || d.unit || 'Caponera';
+      return `
+      <div class="modern-driver-card ${idx === 0 ? 'active' : ''}" data-fare="${20 + idx * 5}" data-driver="${driverName}">
         <div class="driver-avatar-wrap">
           <div class="driver-photo">🛺</div>
           <span class="status-dot online"></span>
         </div>
         <div class="driver-meta">
           <div class="driver-name-row">
-            <h4 class="driver-name">${d.name}</h4>
+            <h4 class="driver-name">${driverName}</h4>
             <span class="driver-stars">⭐ 4.9</span>
           </div>
-          <p class="driver-sub-info">${d.unit} · <span class="eta-text">En Línea</span></p>
+          <p class="driver-sub-info">${driverUnit} · <span class="eta-text">En Línea</span></p>
         </div>
         <div class="driver-price-action">
           <span class="fare-amount">C$ ${20 + idx * 5}.00</span>
-          <button class="btn-accept-chip" onclick="selectDriverOption(this, ${20 + idx * 5}, '${d.name}')">Elegir</button>
+          <button class="btn-accept-chip" onclick="selectDriverOption(this, ${20 + idx * 5}, '${driverName}')">Elegir</button>
         </div>
       </div>
-    `).join('');
+    `;}).join('');
   }
 
   drivers.forEach(driver => {
+    const driverName = driver.nombre || driver.name || 'Conductor';
+    const driverUnit = driver.unidad || driver.unit || 'Caponera';
     const caponeraIcon = L.divIcon({
       className: 'custom-caponera-marker',
       html: `<div style="background:rgba(245,158,11,0.95); width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.25rem; border:2px solid #ffffff; box-shadow:0 0 16px rgba(245,158,11,0.9); cursor:pointer;">🛺</div>`,
@@ -134,7 +139,7 @@ function renderDriversOnMap(drivers) {
     });
 
     const marker = L.marker([driver.lat, driver.lng], { icon: caponeraIcon }).addTo(mapInstance);
-    marker.bindPopup(`<strong>${driver.name}</strong><br>${driver.unit}<br>🟢 Conectado`);
+    marker.bindPopup(`<strong>${driverName}</strong><br>${driverUnit}<br>🟢 Conectado`);
     driverMarkers.push({ marker, data: driver });
   });
 }

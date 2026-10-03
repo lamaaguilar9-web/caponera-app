@@ -283,7 +283,7 @@ def get_conductores():
     
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, nombre, telefono, unidad, lat, lng, is_online, plan_activo FROM conductores WHERE is_online = 1 AND plan_activo = 1")
+        cursor.execute("SELECT id, nombre, unidad, lat, lng, is_online, plan_activo FROM conductores WHERE is_online = 1 AND plan_activo = 1")
         rows = cursor.fetchall()
         
     conductores = []
@@ -291,11 +291,7 @@ def get_conductores():
         d = {
             "id": r["id"],
             "nombre": r["nombre"],
-            "name": r["nombre"],
-            "telefono": r["telefono"],
-            "phone": r["telefono"],
             "unidad": r["unidad"],
-            "unit": r["unidad"],
             "lat": r["lat"],
             "lng": r["lng"],
             "is_online": r["is_online"],
@@ -407,10 +403,17 @@ def solicitar_viaje():
 
 @app.route("/api/viajes/<int:viaje_id>/estado", methods=["GET"])
 def get_estado_viaje(viaje_id):
+    token = (
+        request.headers.get("X-Session-Token")
+        or request.args.get("token")
+        or request.args.get("session_token")
+        or ""
+    ).strip()
+
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT v.id, v.estado, v.tarifa, v.origen, v.destino, v.conductor_id,
+            SELECT v.id, v.session_token, v.estado, v.tarifa, v.origen, v.destino, v.conductor_id,
                    c.id as cond_id, c.nombre as conductor_nombre, c.telefono as conductor_telefono, c.unidad as conductor_unidad
             FROM viajes v
             LEFT JOIN conductores c ON v.conductor_id = c.id
@@ -420,6 +423,10 @@ def get_estado_viaje(viaje_id):
         
     if not row:
         return jsonify({"success": False, "error": "Viaje no encontrado"}), 404
+
+    reg_token = (row["session_token"] or "").strip()
+    if not token or not reg_token or not hmac.compare_digest(token, reg_token):
+        return jsonify({"success": False, "error": "UNAUTHORIZED: Token de sesión requerido o inválido para consultar estado del viaje"}), 403
     
     conductor_obj = None
     if row["conductor_id"]:
