@@ -84,34 +84,6 @@ def purge_expired_trips():
 def before_request_hook():
     purge_expired_trips()
 
-# =========================================================
-# BUS DE EVENTOS EN MEMORIA (SSE - TIEMPO REAL)
-# =========================================================
-class EventBus:
-    def __init__(self):
-        self.listeners: List[queue.Queue] = []
-
-    def subscribe(self) -> queue.Queue:
-        q = queue.Queue(maxsize=100)
-        self.listeners.append(q)
-        return q
-
-    def unsubscribe(self, q: queue.Queue):
-        if q in self.listeners:
-            try:
-                self.listeners.remove(q)
-            except ValueError:
-                pass
-
-    def publish(self, event_type: str, data: dict):
-        payload = f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
-        for q in list(self.listeners):
-            try:
-                q.put_nowait(payload)
-            except (queue.Full, Exception):
-                self.unsubscribe(q)
-
-event_bus = EventBus()
 
 # =========================================================
 # BASE DE DATOS Y CONEXIONES (MODO WAL)
@@ -334,38 +306,6 @@ def privacy_page():
 def static_files(filename):
     return send_from_directory(".", filename)
 
-# =========================================================
-# STREAMING SSE EN TIEMPO REAL
-# =========================================================
-@app.route("/api/stream")
-def sse_stream():
-    """Canal continuo SSE con heartbeat periódico (20s) y auto-purga de conexiones muertas."""
-    def event_generator():
-        client_queue = event_bus.subscribe()
-        try:
-            yield f"event: ping\ndata: {json.dumps({'time': datetime.datetime.now().isoformat()})}\n\n"
-            while True:
-                try:
-                    # Timeout de 20s para despachar heartbeat activo
-                    msg = client_queue.get(timeout=20.0)
-                    yield msg
-                except queue.Empty:
-                    # Heartbeat activo: detecta inmediatamente desconexiones del cliente
-                    yield f": heartbeat {datetime.datetime.now().isoformat()}\n\n"
-        except (GeneratorExit, BrokenPipeError, ConnectionResetError, Exception):
-            pass
-        finally:
-            event_bus.unsubscribe(client_queue)
-
-    return Response(
-        event_generator(),
-        mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-            "Connection": "keep-alive"
-        }
-    )
 
 # =========================================================
 # RUTAS API: CONFIGURACIÓN Y CIUDAD OPERATIVA (CA-9)
@@ -483,14 +423,6 @@ def update_posicion(conductor_id=None):
         """, (lat, lng, is_online, conductor_id))
         conn.commit()
 
-    # Difusión en tiempo real por SSE
-    event_bus.publish("conductor_movimiento", {
-        "conductor_id": conductor_id,
-        "lat": lat,
-        "lng": lng,
-        "is_online": is_online
-    })
-        
     return jsonify({"success": True, "mensaje": "Posición actualizada"})
 
 # =========================================================
@@ -542,17 +474,6 @@ def solicitar_viaje():
         viaje_id = cursor.lastrowid
         conn.commit()
 
-    # Notificar a los conductores conectados en vivo
-    event_bus.publish("nuevo_viaje", {
-        "viaje_id": viaje_id,
-        "pasajero": pasajero,
-        "origen": origen,
-        "destino": destino,
-        "tarifa": tarifa,
-        "lat": lat_o,
-        "lng": lng_o
-    })
-        
     return jsonify({
         "success": True, 
         "viaje_id": viaje_id,
@@ -653,7 +574,6 @@ def cancelar_viaje(viaje_id=None):
         """, (viaje_id,))
         conn.commit()
 
-    event_bus.publish("viaje_cancelado", {"viaje_id": viaje_id})
     return jsonify({"success": True, "mensaje": "Viaje cancelado exitosamente"})
 
 @app.route("/api/conductor/viajes_pendientes", methods=["GET"])
@@ -740,12 +660,6 @@ def aceptar_viaje(viaje_id):
         cond_row = cursor.fetchone()
         cond_data = dict(cond_row) if cond_row else {}
 
-    # Notificar al pasajero en tiempo real por SSE
-    event_bus.publish("viaje_aceptado", {
-        "viaje_id": viaje_id,
-        "conductor": cond_data
-    })
-        
     return jsonify({
         "success": True, 
         "mensaje": "¡Viaje asignado con éxito! Dirígete al punto de recogida.",

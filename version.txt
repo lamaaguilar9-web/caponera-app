@@ -1,1 +1,1 @@
-1.1.1-recorte-transporte
+1.1.2-stream-eliminado
