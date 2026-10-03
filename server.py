@@ -294,6 +294,33 @@ def manifest():
 def service_worker():
     return send_from_directory(".", "sw.js", mimetype="application/javascript")
 
+def get_app_version():
+    if os.getenv("APP_VERSION"):
+        return os.getenv("APP_VERSION")
+    try:
+        import subprocess
+        ver = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL).decode("utf-8").strip()
+        if ver:
+            return ver
+    except Exception:
+        pass
+    if os.path.exists("version.txt"):
+        try:
+            with open("version.txt", "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except Exception:
+            pass
+    return "1.0.0-hardened"
+
+@app.route("/api/version", methods=["GET"])
+@app.route("/health", methods=["GET"])
+def get_version():
+    return jsonify({
+        "app": "caponera-app",
+        "version": get_app_version(),
+        "status": "healthy"
+    })
+
 @app.route("/privacidad")
 def privacy_page():
     return send_from_directory(".", "privacidad.html")
