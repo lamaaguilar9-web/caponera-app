@@ -93,7 +93,7 @@ docker exec caponera_app sqlite3 /app/caponera.db ".backup '/app/caponera_hotbac
 ### B. Títulos y Marca
 - **Título en HTML (`index.html`):** `Caponera App 🛺 | Transporte y Mandados en Masaya`
 - **Nombre de Unidad Pionera:** `Unidad #7 · Caponera Express`
-- **Términos Legales:** Referencia expresa a `Ley 787 · Caponera App Masaya` (Ley de Protección de Datos Personales de Nicaragua).
+- **Términos Legales:** Referencia expresa a la legislación aplicable en protección de datos personales con enlace a la fuente oficial de la Asamblea Nacional.
 
 ### C. Teléfonos y Enlaces de Contacto WhatsApp
 - **Teléfono de Despacho Central / Administrador (`app.js` / `server.py`):** `50589130414` (`+505 8913-0414`).
