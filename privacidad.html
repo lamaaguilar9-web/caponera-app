@@ -80,20 +80,29 @@
           Para brindar el servicio de visualización en el mapa y cálculo de distancias, la aplicación solicita acceso a tu geolocalización a través de la API estándar de tu navegador o dispositivo:
         </p>
         <ul class="list-disc pl-5 space-y-1 text-xs text-slate-400">
-          <li><strong>Uso exclusivo en primer plano:</strong> Tu ubicación solo se consulta cuando mantienes la aplicación abierta y en uso activo para fijar tu punto de recogida o indicar tu posición en Masaya.</li>
+          <li><strong>Uso exclusivo en primer plano:</strong> Tu ubicación solo se consulta cuando mantienes la aplicación abierta y en uso activo para fijar tu punto de recogida en el mapa.</li>
           <li><strong>Sin rastreo en segundo plano:</strong> La aplicación no monitorea, registra ni transmite coordenadas cuando la cierras o sales del navegador.</li>
           <li><strong>Sin almacenamiento de rutas históricas:</strong> No construimos perfiles de tus desplazamientos cotidianos ni almacenamos historiales de movilidad de personas particulares.</li>
         </ul>
       </section>
 
       <!-- Sección 3 -->
-      <section class="space-y-2">
+      <section class="space-y-3">
         <h2 class="text-base font-extrabold text-amber-400 flex items-center gap-2">
-          <i class="fa-brands fa-whatsapp text-sm"></i> 3. Datos de Contacto y Coordinación Directa
+          <i class="fa-solid fa-database text-sm"></i> 3. Datos Recopilados, Servidor y Retención
         </h2>
-        <p>
-          Cuando solicitas o aceptas una carrera o mandado, la información provista voluntariamente (nombre de referencia y número de teléfono celular) tiene el único objetivo de generar el enlace de comunicación directa por WhatsApp o llamada entre el pasajero y el conductor de la caponera.
-        </p>
+        <div class="space-y-2">
+          <p>
+            Para procesar y coordinar los servicios solicitados, el sistema opera con los siguientes criterios exactos:
+          </p>
+          <ul class="list-disc pl-5 space-y-1.5 text-xs text-slate-300">
+            <li><strong>Datos del Pasajero:</strong> Al pasajero <em>únicamente</em> se le solicita un <strong>nombre de referencia</strong> (no se solicita ni se almacena su número telefónico ni correo electrónico).</li>
+            <li><strong>Datos del Viaje:</strong> Cada registro de viaje guarda el nombre de referencia, los textos de origen y destino, la tarifa propuesta y las <strong>coordenadas geográficas (latitud y longitud)</strong> del punto de origen para que el conductor pueda ubicar la recogida en el mapa.</li>
+            <li><strong>Datos del Conductor:</strong> Se almacena su nombre, número de unidad, teléfono de contacto y token de chofer; el teléfono del conductor se muestra al pasajero únicamente una vez aceptada la carrera para posibilitar la llamada o coordinación directa por WhatsApp.</li>
+            <li><strong>Ubicación de los Servidores:</strong> Los datos operativos y la base de datos residen en un servidor seguro ubicado en <strong>Houston, Texas, Estados Unidos</strong>.</li>
+            <li><strong>Plazo de Retención:</strong> Los registros de viajes realizados y las referencias de recarga de conductores se conservan en el sistema hasta que el usuario titular solicite expresamente su supresión o borrado a través de nuestro canal de WhatsApp.</li>
+          </ul>
+        </div>
       </section>
 
       <!-- Sección 4 -->
