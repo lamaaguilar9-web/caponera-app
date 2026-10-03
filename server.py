@@ -5,6 +5,7 @@ import queue
 import sqlite3
 import datetime
 import hmac
+import secrets
 from typing import List
 from flask import Flask, request, jsonify, send_from_directory, render_template_string, Response
 
@@ -73,6 +74,7 @@ def init_db():
                 nombre TEXT NOT NULL,
                 telefono TEXT NOT NULL UNIQUE,
                 unidad TEXT NOT NULL,
+                driver_token TEXT UNIQUE,
                 lat REAL DEFAULT 12.1364,
                 lng REAL DEFAULT -86.2514,
                 is_online INTEGER DEFAULT 0,
@@ -82,6 +84,15 @@ def init_db():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        try:
+            cursor.execute("ALTER TABLE conductores ADD COLUMN driver_token TEXT;")
+        except sqlite3.OperationalError:
+            pass
+
+        # Generar driver_token para conductores existentes que no lo tengan
+        cursor.execute("SELECT id FROM conductores WHERE driver_token IS NULL OR driver_token = ''")
+        for row in cursor.fetchall():
+            cursor.execute("UPDATE conductores SET driver_token = ? WHERE id = ?", (secrets.token_hex(16), row["id"]))
         
         # 2. Viajes
         cursor.execute("""
@@ -160,6 +171,39 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
         return round(R * c, 2)
     except Exception:
         return 1.0
+
+# =========================================================
+# AUTENTICACIÓN DEL LADO CONDUCTOR (CA-2)
+# =========================================================
+def get_authenticated_driver(expected_conductor_id=None):
+    """
+    Autentica al conductor mediante el header X-Driver-Token en tiempo constante (CA-2).
+    Si expected_conductor_id es provisto, valida que el token pertenezca exactamente a ese conductor.
+    Si expected_conductor_id no es provisto, busca el conductor asociado al token.
+    Retorna (driver_dict, None) si es válido, o (None, (error_response, 403)).
+    """
+    token = request.headers.get("X-Driver-Token", "").strip()
+    if not token:
+        return None, (jsonify({"success": False, "error": "Autenticación requerida: Header X-Driver-Token ausente"}), 403)
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if expected_conductor_id is not None:
+            try:
+                cid = int(expected_conductor_id)
+            except (ValueError, TypeError):
+                return None, (jsonify({"success": False, "error": "ID de conductor inválido"}), 400)
+            cursor.execute("SELECT * FROM conductores WHERE id = ?", (cid,))
+            driver = cursor.fetchone()
+            if not driver or not driver["driver_token"] or not hmac.compare_digest(token, driver["driver_token"]):
+                return None, (jsonify({"success": False, "error": "Acceso denegado: X-Driver-Token no coincide con el conductor"}), 403)
+            return dict(driver), None
+        else:
+            cursor.execute("SELECT * FROM conductores WHERE driver_token IS NOT NULL AND driver_token != ''")
+            for d in cursor.fetchall():
+                if hmac.compare_digest(token, d["driver_token"]):
+                    return dict(d), None
+            return None, (jsonify({"success": False, "error": "Acceso denegado: X-Driver-Token inválido"}), 403)
 
 # =========================================================
 # RUTAS ESTÁTICAS Y PWA
@@ -279,10 +323,14 @@ def update_posicion(conductor_id=None):
     data = request.get_json(silent=True) or {}
     
     if conductor_id is None:
-        conductor_id = data.get("conductor_id", 1)
+        conductor_id = data.get("conductor_id")
         
+    driver, auth_err = get_authenticated_driver(conductor_id)
+    if auth_err:
+        return auth_err
+    conductor_id = driver["id"]
+
     try:
-        conductor_id = int(conductor_id)
         lat = float(data.get("lat"))
         lng = float(data.get("lng"))
     except (TypeError, ValueError):
@@ -434,6 +482,11 @@ def cancelar_viaje(viaje_id=None):
 @app.route("/api/conductor/viajes_pendientes", methods=["GET"])
 @app.route("/api/conductor/viajes-pendientes", methods=["GET"])
 def get_viajes_pendientes():
+    conductor_id = request.args.get("conductor_id")
+    driver, auth_err = get_authenticated_driver(conductor_id)
+    if auth_err:
+        return auth_err
+
     conductor_lat = float(request.args.get("lat", 12.1364))
     conductor_lng = float(request.args.get("lng", -86.2514))
     max_km = float(request.args.get("radio_km", 4.0))
@@ -464,10 +517,18 @@ def get_viajes_pendientes():
 @app.route("/api/viajes/<int:viaje_id>/aceptar", methods=["POST"])
 def aceptar_viaje(viaje_id):
     data = request.get_json(silent=True) or {}
-    try:
-        conductor_id = int(data.get("conductor_id", 1))
-    except (TypeError, ValueError):
-        return jsonify({"success": False, "error": "ID de conductor inválido"}), 400
+    raw_cid = data.get("conductor_id")
+    conductor_id = None
+    if raw_cid is not None:
+        try:
+            conductor_id = int(raw_cid)
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "error": "ID de conductor inválido"}), 400
+
+    driver, auth_err = get_authenticated_driver(conductor_id)
+    if auth_err:
+        return auth_err
+    conductor_id = driver["id"]
     
     with get_db() as conn:
         cursor = conn.cursor()
@@ -504,8 +565,20 @@ def aceptar_viaje(viaje_id):
 @app.route("/api/conductor/recarga", methods=["POST"])
 def registrar_recarga():
     data = request.get_json(silent=True) or {}
+    raw_cid = data.get("conductor_id")
+    conductor_id = None
+    if raw_cid is not None:
+        try:
+            conductor_id = int(raw_cid)
+        except (TypeError, ValueError):
+            return jsonify({"success": False, "error": "Datos inválidos"}), 400
+
+    driver, auth_err = get_authenticated_driver(conductor_id)
+    if auth_err:
+        return auth_err
+    conductor_id = driver["id"]
+
     try:
-        conductor_id = int(data.get("conductor_id", 1))
         monto = float(data.get("monto", 50.0))
     except (TypeError, ValueError):
         return jsonify({"success": False, "error": "Datos inválidos"}), 400
@@ -553,7 +626,7 @@ ADMIN_HTML = """
     <h2>Conductores Registrados</h2>
     <table>
       <thead>
-        <tr><th>ID</th><th>Nombre</th><th>Teléfono</th><th>Unidad</th><th>Plan</th><th>Estado</th></tr>
+        <tr><th>ID</th><th>Nombre</th><th>Teléfono</th><th>Unidad</th><th>Driver Token (PIN)</th><th>Plan</th><th>Estado</th></tr>
       </thead>
       <tbody>
         {% for c in conductores %}
@@ -562,6 +635,7 @@ ADMIN_HTML = """
           <td>{{ c.nombre }}</td>
           <td>{{ c.telefono }}</td>
           <td>{{ c.unidad }}</td>
+          <td><code>{{ c.driver_token }}</code></td>
           <td><span class="badge badge-success">{{ c.plan_nombre }}</span></td>
           <td>{{ 'Online 🟢' if c.is_online else 'Offline ⚪' }}</td>
         </tr>
