@@ -1,6 +1,6 @@
 # Caponera App 🛺
 
-Plataforma comunitaria Progressive Web App (PWA) de despacho y enlace directo para transporte liviano (mototaxis / caponeras) y mandados locales.
+Plataforma comunitaria Progressive Web App (PWA) de despacho y enlace directo para transporte comunitario de pasajeros en vehículos livianos (mototaxis / caponeras).
 
 Diseñada con arquitectura ligera y desacoplada: Frontend Vanilla PWA (cero dependencias de framework, sonido sintético vía Web Audio API, mapas Leaflet) con Backend Flask impulsado por un bus reactivo de Server-Sent Events (SSE) y almacenamiento transaccional SQLite en modo WAL.
 
@@ -91,7 +91,7 @@ docker exec caponera_app sqlite3 /app/caponera.db ".backup '/app/caponera_hotbac
 - **Zonas de Publicidad:** Masaya Centro, San Jerónimo, Mercado Municipal.
 
 ### B. Títulos y Marca
-- **Título en HTML (`index.html`):** `Caponera App 🛺 | Transporte y Mandados en Masaya`
+- **Título en HTML (`index.html`):** `Caponera App 🛺 | Transporte Comunitario de Pasajeros`
 - **Nombre de Unidad Pionera:** `Unidad #7 · Caponera Express`
 - **Términos Legales:** Referencia expresa a la legislación aplicable en protección de datos personales con enlace a la fuente oficial de la Asamblea Nacional.
 

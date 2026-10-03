@@ -207,14 +207,7 @@ function setupUIEventListeners() {
 
   document.getElementById('tabViajes')?.addEventListener('click', () => {
     document.getElementById('tabViajes')?.classList.add('active');
-    document.getElementById('tabEnvios')?.classList.remove('active');
     showToast("🛺 Modo Pasajeros activo");
-  });
-
-  document.getElementById('tabEnvios')?.addEventListener('click', () => {
-    document.getElementById('tabEnvios')?.classList.add('active');
-    document.getElementById('tabViajes')?.classList.remove('active');
-    showToast("📦 Modo Envíos y Mandados Express activo");
   });
 
   document.getElementById('btnLocateMe')?.addEventListener('click', () => {

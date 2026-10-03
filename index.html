@@ -9,7 +9,7 @@
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" href="icon-192.png" />
-  <title>Caponera App 🛺 | Transporte y Mandados en Masaya</title>
+  <title>Caponera App 🛺 | Transporte Comunitario de Pasajeros</title>
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -88,16 +88,10 @@
         </button>
       </div>
 
-      <!-- Selector de Tipo de Servicio -->
-      <div class="grid grid-cols-2 gap-3">
-        <button id="typeTrip" onclick="seleccionarTipoServicio('viaje')" class="p-3 rounded-2xl bg-amber-500 text-slate-950 font-black border border-amber-400 flex flex-col items-center gap-1.5 transition-all shadow-md active:scale-95">
-          <i class="fa-solid fa-person-walking-luggage text-lg"></i>
-          <span class="text-xs">Viaje Pasajero</span>
-        </button>
-        <button id="typeDelivery" onclick="seleccionarTipoServicio('mandado')" class="p-3 rounded-2xl bg-slate-900 text-slate-300 font-black border border-slate-800 flex flex-col items-center gap-1.5 hover:border-slate-700 transition-all active:scale-95">
-          <i class="fa-solid fa-box-open text-lg"></i>
-          <span class="text-xs">Mandado / Encomienda</span>
-        </button>
+      <!-- Modo Servicio de Pasajeros -->
+      <div class="p-3 rounded-2xl bg-amber-500 text-slate-950 font-black border border-amber-400 flex items-center justify-center gap-2 shadow-md">
+        <i class="fa-solid fa-person-walking-luggage text-base"></i>
+        <span class="text-xs tracking-wide">Transporte Comunitario de Pasajeros</span>
       </div>
 
       <!-- Formulario de Solicitud de Carrera -->
@@ -448,7 +442,6 @@
           <li class="pt-2 flex justify-between"><span>Casco Urbano / Centro:</span> <strong class="text-white">C$ 20 - 30</strong></li>
           <li class="pt-2 flex justify-between"><span>Hacia Barrios / Repartos:</span> <strong class="text-white">C$ 30 - 40</strong></li>
           <li class="pt-2 flex justify-between"><span>Comarcas / Distancias largas:</span> <strong class="text-white">C$ 50 - 70</strong></li>
-          <li class="pt-2 flex justify-between"><span>Mandados / Encomiendas:</span> <strong class="text-white">C$ 35 - 50</strong></li>
         </ul>
         <button onclick="ocultarTarifario()" class="w-full mt-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl text-xs transition active:scale-95">¡Entendido!</button>
       </div>
@@ -572,11 +565,11 @@
         },
         {
           id: 102,
-          pasajero_nombre: 'Taller El Chelito',
-          origen: 'Calle Central',
-          destino: 'Repuestos Masaya (Mandado)',
-          tarifa: 45,
-          tipo: 'mandado',
+          pasajero_nombre: 'Don Carlos Mendoza',
+          origen: 'Mercado de Artesanías',
+          destino: 'Parque Central',
+          tarifa: 30,
+          tipo: 'viaje',
           tiempo: 'Hace 4 min'
         }
       ]
@@ -837,8 +830,8 @@
       estado.viajesDisponibles.forEach((v, index) => {
         const item = document.createElement('div');
         item.className = 'bg-slate-900 border border-slate-800 p-3.5 rounded-3xl flex flex-col gap-2.5 shadow-md';
-        const tipoLabel = v.tipo === 'mandado' ? 'Mandado' : 'Pasajero';
-        const tipoBadgeClass = v.tipo === 'mandado' ? 'bg-indigo-950 text-indigo-400 border border-indigo-500/30' : 'bg-amber-950 text-amber-400 border border-amber-500/30';
+        const tipoLabel = 'Pasajero';
+        const tipoBadgeClass = 'bg-amber-950 text-amber-400 border border-amber-500/30';
 
         item.innerHTML = `
           <div class="flex justify-between items-start">
