@@ -455,7 +455,17 @@ def cancelar_viaje(viaje_id=None):
     if not viaje_id:
         return jsonify({"success": False, "error": "ID de viaje requerido"}), 400
 
-    token = request.headers.get("X-Session-Token") or data.get("session_token") or data.get("token")
+    token = (
+        request.headers.get("X-Session-Token")
+        or (data.get("session_token") if isinstance(data, dict) else None)
+        or (data.get("token") if isinstance(data, dict) else None)
+        or request.args.get("session_token")
+        or request.args.get("token")
+        or ""
+    ).strip()
+
+    if not token:
+        return jsonify({"success": False, "error": "Autenticación requerida: session_token ausente"}), 403
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -464,9 +474,9 @@ def cancelar_viaje(viaje_id=None):
         if not row:
             return jsonify({"success": False, "error": "Viaje no encontrado"}), 404
 
-        reg_token = row["session_token"]
-        # Control de Autorización estricto (Anti-IDOR)
-        if reg_token and token and reg_token != token:
+        reg_token = (row["session_token"] or "").strip()
+        # Control de Autorización estricto (Anti-IDOR) en tiempo constante
+        if not reg_token or not hmac.compare_digest(token, reg_token):
             return jsonify({"success": False, "error": "UNAUTHORIZED: Token de sesión no coincide con el emisor del viaje"}), 403
 
         cursor.execute("""
