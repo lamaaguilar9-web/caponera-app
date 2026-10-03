@@ -152,6 +152,17 @@ def run_all_tests():
     # La sexta solicitud consecutiva debe dar 429
     r_burst = client.post("/api/viajes/crear", json={"origen": "A", "destino": "B", "tarifa": 20}, environ_base={"REMOTE_ADDR": test_ip})
     assert r_burst.status_code == 429, f"Esperado 429 por rate limit, obtenido {r_burst.status_code}"
+
+    # Verificación P6: Ráfaga con cabecera X-Forwarded-For falsificada (mitigación de IP spoofing)
+    spoofed_proxy_ip = "192.168.1.250"
+    for i in range(5):
+        headers = {"X-Forwarded-For": f"10.99.{i}.1, {spoofed_proxy_ip}"}
+        r = client.post("/api/viajes/crear", json={"origen": "A", "destino": "B", "tarifa": 20}, headers=headers)
+        assert r.status_code == 200, f"Petición spoofed {i+1} debe permitirse"
+    
+    r_spoofed_burst = client.post("/api/viajes/crear", json={"origen": "A", "destino": "B", "tarifa": 20}, 
+                                  headers={"X-Forwarded-For": f"10.99.99.99, {spoofed_proxy_ip}"})
+    assert r_spoofed_burst.status_code == 429, f"Esperado 429 mitigando spoofing en X-Forwarded-For, obtenido {r_spoofed_burst.status_code}"
     
     # TTL: viaje expirado
     with server.get_db() as conn:

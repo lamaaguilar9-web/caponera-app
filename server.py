@@ -30,10 +30,17 @@ def add_cors(response):
 # RATE LIMITING & TTL DE VIAJES (CA-6)
 # =========================================================
 def get_client_ip() -> str:
-    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "127.0.0.1")
-    if "," in ip:
-        ip = ip.split(",")[0].strip()
-    return ip.strip()
+    real_ip = request.headers.get("X-Real-IP", "").strip()
+    if real_ip:
+        return real_ip
+
+    xff = request.headers.get("X-Forwarded-For", "").strip()
+    if xff:
+        parts = [p.strip() for p in xff.split(",") if p.strip()]
+        if parts:
+            return parts[-1]
+
+    return request.remote_addr or "127.0.0.1"
 
 class InMemoryRateLimiter:
     def __init__(self, max_requests: int = 5, window_sec: int = 60):
@@ -274,9 +281,7 @@ def get_authenticated_driver(expected_conductor_id=None):
 @app.route("/")
 def index():
     try:
-        ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-        if ip and ',' in ip:
-            ip = ip.split(',')[0].strip()
+        ip = get_client_ip()
         ua = request.headers.get('User-Agent', '')[:255]
         ref = (request.referrer or '')[:255]
         with get_db() as conn:
