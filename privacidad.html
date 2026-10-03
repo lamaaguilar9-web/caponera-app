@@ -102,13 +102,11 @@
           <i class="fa-solid fa-cookie-bite text-sm"></i> 4. Almacenamiento Local (Local Storage y Caché)
         </h2>
         <p>
-          Utilizamos el almacenamiento local de tu navegador (HTML5 LocalStorage) de manera técnica y estrictamente funcional para:
+          El único dato guardado en el almacenamiento local de tu navegador (HTML5 LocalStorage) es el <strong>token criptográfico de sesión del viaje</strong> (<code>caponera_token_&lt;id&gt;</code> y <code>caponera_active_trip_token</code>), utilizado de manera técnica y estrictamente funcional para validar la autorización de consulta de estado y cancelación de tu pedido, previniendo cancelaciones no autorizadas por terceros.
         </p>
-        <ul class="list-disc pl-5 space-y-1 text-xs text-slate-400">
-          <li>Recordar tu rol preferido (Pasajero o Caponero) para que no tengas que seleccionarlo cada vez.</li>
-          <li>Recordar tus preferencias de tarifas habituales.</li>
-          <li>Permitir que la aplicación web progresiva (PWA) cargue instantáneamente incluso con conectividad móvil limitada.</li>
-        </ul>
+        <p class="text-xs text-slate-400">
+          La aplicación no utiliza cookies ni almacena en LocalStorage perfiles de navegación, roles ni rastreadores publicitarios.
+        </p>
       </section>
 
       <!-- Sección 5 -->
