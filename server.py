@@ -135,6 +135,7 @@ def init_db():
                 plan_activo INTEGER DEFAULT 1,
                 plan_nombre TEXT DEFAULT 'Pionero (15 Días Gratis)',
                 plan_expira TEXT,
+                is_demo INTEGER DEFAULT 0,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -142,6 +143,14 @@ def init_db():
             cursor.execute("ALTER TABLE conductores ADD COLUMN driver_token TEXT;")
         except sqlite3.OperationalError:
             pass
+
+        try:
+            cursor.execute("ALTER TABLE conductores ADD COLUMN is_demo INTEGER DEFAULT 0;")
+        except sqlite3.OperationalError:
+            pass
+
+        # Marcar conductores demo existentes
+        cursor.execute("UPDATE conductores SET is_demo = 1 WHERE telefono IN ('50589130414', '50588881111', '50588882222')")
 
         # Generar driver_token para conductores existentes que no lo tengan
         cursor.execute("SELECT id FROM conductores WHERE driver_token IS NULL OR driver_token = ''")
@@ -196,18 +205,18 @@ def init_db():
             )
         """)
         
-        # Insertar conductores iniciales si la tabla está vacía
+        # Insertar conductores iniciales si la tabla está vacía Y CAPONERA_SEED_DEMO == "1"
         cursor.execute("SELECT COUNT(*) FROM conductores")
-        if cursor.fetchone()[0] == 0:
+        if cursor.fetchone()[0] == 0 and os.getenv("CAPONERA_SEED_DEMO", "0") == "1":
             exp_date = (datetime.datetime.now() + datetime.timedelta(days=15)).strftime("%Y-%m-%d")
             initial_drivers = [
-                ("José Ramón", "50589130414", "Unidad #7 · Caponera Express", 12.1370, -86.2520, 1, 1, "Pionero (15 Días Gratis)", exp_date),
-                ("Alex Mendoza", "50588881111", "Caponera #14 (Tarifa Básica)", 12.1390, -86.2490, 1, 1, "Pionero (15 Días Gratis)", exp_date),
-                ("María González", "50588882222", "Moto Taxi #09", 12.1340, -86.2540, 1, 1, "Pionero (15 Días Gratis)", exp_date)
+                ("José Ramón", "50589130414", "Unidad #7 · Caponera Express", secrets.token_hex(16), 12.1370, -86.2520, 1, 1, "Pionero (15 Días Gratis)", exp_date, 1),
+                ("Alex Mendoza", "50588881111", "Caponera #14 (Tarifa Básica)", secrets.token_hex(16), 12.1390, -86.2490, 1, 1, "Pionero (15 Días Gratis)", exp_date, 1),
+                ("María González", "50588882222", "Moto Taxi #09", secrets.token_hex(16), 12.1340, -86.2540, 1, 1, "Pionero (15 Días Gratis)", exp_date, 1)
             ]
             cursor.executemany("""
-                INSERT INTO conductores (nombre, telefono, unidad, lat, lng, is_online, plan_activo, plan_nombre, plan_expira)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO conductores (nombre, telefono, unidad, driver_token, lat, lng, is_online, plan_activo, plan_nombre, plan_expira, is_demo)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, initial_drivers)
             
         conn.commit()
@@ -334,10 +343,21 @@ def sse_stream():
 def get_conductores():
     lat = request.args.get("lat", type=float)
     lng = request.args.get("lng", type=float)
+    seed_demo = os.getenv("CAPONERA_SEED_DEMO", "0") == "1"
     
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, nombre, unidad, lat, lng, is_online, plan_activo FROM conductores WHERE is_online = 1 AND plan_activo = 1")
+        query = """
+            SELECT id, nombre, unidad, lat, lng, is_online, plan_activo, plan_expira, is_demo 
+            FROM conductores 
+            WHERE is_online = 1 
+              AND plan_activo = 1
+              AND (plan_expira IS NULL OR date(plan_expira) >= date('now'))
+        """
+        if not seed_demo:
+            query += " AND (is_demo IS NULL OR is_demo = 0)"
+
+        cursor.execute(query)
         rows = cursor.fetchall()
         
     conductores = []
@@ -604,6 +624,22 @@ def aceptar_viaje(viaje_id):
     if auth_err:
         return auth_err
     conductor_id = driver["id"]
+
+    # Validar que el plan del conductor esté activo y no expirado (CA-7)
+    if driver.get("plan_activo") != 1:
+        return jsonify({"success": False, "error": "Acceso denegado: El plan del conductor está inactivo"}), 403
+
+    plan_exp = driver.get("plan_expira")
+    if plan_exp:
+        try:
+            exp_d = datetime.datetime.strptime(str(plan_exp)[:10], "%Y-%m-%d").date()
+            if exp_d < datetime.date.today():
+                with get_db() as c_up:
+                    c_up.cursor().execute("UPDATE conductores SET plan_activo = 0 WHERE id = ?", (conductor_id,))
+                    c_up.commit()
+                return jsonify({"success": False, "error": "Acceso denegado: El plan del conductor ha expirado"}), 403
+        except Exception:
+            pass
     
     with get_db() as conn:
         cursor = conn.cursor()
