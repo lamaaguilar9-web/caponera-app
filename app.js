@@ -241,6 +241,14 @@ async function solicitarViajeAutomatico() {
     const data = await res.json();
     if (data.success) {
       activeTripId = data.viaje_id;
+      if (data.session_token) {
+        try {
+          localStorage.setItem(`caponera_token_${activeTripId}`, data.session_token);
+          localStorage.setItem('caponera_active_trip_token', data.session_token);
+        } catch (err) {
+          console.warn("No se pudo guardar session_token en localStorage:", err);
+        }
+      }
       iniciarMonitoreoViaje(activeTripId);
     } else {
       throw new Error(data.error || "Error al crear viaje");
@@ -259,9 +267,14 @@ async function solicitarViajeAutomatico() {
 function iniciarMonitoreoViaje(viajeId) {
   if (tripPollInterval) clearInterval(tripPollInterval);
 
+  const token = localStorage.getItem(`caponera_token_${viajeId}`) || localStorage.getItem('caponera_active_trip_token') || '';
+
   tripPollInterval = setInterval(async () => {
     try {
-      const res = await fetch(`/api/viajes/${viajeId}/estado`);
+      const headers = {};
+      if (token) headers['X-Session-Token'] = token;
+      const url = token ? `/api/viajes/${viajeId}/estado?token=${encodeURIComponent(token)}` : `/api/viajes/${viajeId}/estado`;
+      const res = await fetch(url, { headers });
       const data = await res.json();
 
       if (data.estado === 'aceptado' && data.conductor) {
@@ -274,6 +287,35 @@ function iniciarMonitoreoViaje(viajeId) {
     }
   }, 1800);
 }
+
+window.cancelarViajeActivo = async function(viajeId) {
+  const targetId = viajeId || activeTripId;
+  if (!targetId) return;
+  const token = localStorage.getItem(`caponera_token_${targetId}`) || localStorage.getItem('caponera_active_trip_token') || '';
+  try {
+    const res = await fetch(`/api/viajes/${targetId}/cancelar`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-Token': token
+      },
+      body: JSON.stringify({ viaje_id: targetId, session_token: token })
+    });
+    const resData = await res.json();
+    if (resData.success) {
+      if (tripPollInterval) {
+        clearInterval(tripPollInterval);
+        tripPollInterval = null;
+      }
+      try {
+        localStorage.removeItem(`caponera_token_${targetId}`);
+      } catch (err) {}
+      showToast("Viaje cancelado exitosamente.");
+    }
+  } catch (e) {
+    console.log("Error cancelando viaje:", e);
+  }
+};
 
 function mostrarConfirmacionPasajero(conductor, tarifa) {
   playTripAlertSound();

@@ -698,6 +698,12 @@
         const resData = await resp.json();
         if (resData.success) {
           estado.viajeActivoId = resData.viaje_id;
+          if (resData.session_token) {
+            try {
+              localStorage.setItem(`caponera_token_${estado.viajeActivoId}`, resData.session_token);
+              localStorage.setItem('caponera_active_trip_token', resData.session_token);
+            } catch (err) {}
+          }
         }
       } catch (e) {
         console.log("Modo local/simulado activo:", e);
@@ -733,8 +739,19 @@
 
     async function cancelarViaje() {
       if (estado.viajeActivoId) {
+        const token = localStorage.getItem(`caponera_token_${estado.viajeActivoId}`) || localStorage.getItem('caponera_active_trip_token') || '';
         try {
-          await fetch(`/api/viajes/${estado.viajeActivoId}/cancelar`, { method: 'POST' });
+          await fetch(`/api/viajes/${estado.viajeActivoId}/cancelar`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Session-Token': token
+            },
+            body: JSON.stringify({ viaje_id: estado.viajeActivoId, session_token: token })
+          });
+          try {
+            localStorage.removeItem(`caponera_token_${estado.viajeActivoId}`);
+          } catch(err) {}
         } catch(e){}
       }
       document.getElementById('activeTripCard').classList.add('hidden');
