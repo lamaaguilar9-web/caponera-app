@@ -175,14 +175,8 @@ function requestRealLocation() {
         if (userMarker) userMarker.setLatLng([lat, lng]);
         if (mapInstance) mapInstance.setView([lat, lng], 15);
 
-        fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`)
-          .then(res => res.json())
-          .then(data => {
-            const city = data.address?.city || data.address?.town || data.address?.village || data.address?.county || "Tu Ubicación";
-            const cityLabel = document.getElementById('currentCityLabel');
-            if (cityLabel) cityLabel.textContent = city;
-          })
-          .catch(() => {});
+        const cityLabel = document.getElementById('currentCityLabel');
+        if (cityLabel) cityLabel.textContent = "Ubicación detectada";
       },
       () => {},
       { timeout: 8000 }
