@@ -879,7 +879,7 @@ def admin_panel():
     return render_template_string(ADMIN_HTML, conductores=conductores, viajes=viajes)
 
 if __name__ == "__main__":
-    host_bind = os.getenv("HOST", "127.0.0.1")
+    host_bind = os.getenv("HOST", "0.0.0.0")
     print("==================================================")
     print(f"[OK] CAPONERA ENGINE ACTIVO en http://{host_bind}:5054")
     print("   Tiempo Real (SSE) y API de Despacho Listos")

@@ -7,7 +7,7 @@ echo ===========================================================================
 echo.
 echo [1/3] Sincronizando archivos actualizados a /root/caponera_app/...
 echo (Introduce la contrasenia de root del VPS si te la solicita)
-scp "C:\Users\luis\caponera_app\index.html" "C:\Users\luis\caponera_app\server.py" "C:\Users\luis\caponera_app\app.js" "C:\Users\luis\caponera_app\sw.js" "C:\Users\luis\caponera_app\version.txt" "C:\Users\luis\caponera_app\privacidad.html" "C:\Users\luis\caponera_app\test_dispatch.py" root@2.25.121.124:/root/caponera_app/
+scp "C:\Users\luis\caponera_app\index.html" "C:\Users\luis\caponera_app\server.py" "C:\Users\luis\caponera_app\app.js" "C:\Users\luis\caponera_app\sw.js" "C:\Users\luis\caponera_app\version.txt" "C:\Users\luis\caponera_app\privacidad.html" "C:\Users\luis\caponera_app\test_dispatch.py" "C:\Users\luis\caponera_app\Dockerfile" "C:\Users\luis\caponera_app\docker-compose.yml" root@2.25.121.124:/root/caponera_app/
 
 echo.
 echo [2/3] Reconstruyendo y reiniciando contenedor docker en el VPS...
