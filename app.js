@@ -22,7 +22,27 @@ let tripPollInterval = null;
 let driverPollInterval = null;
 let currentDriverId = 1; // José Ramón · Unidad #7
 
+// Configuration State (CA-9)
+let appConfig = {
+  ciudad: 'Masaya',
+  tarifa_min: 15,
+  tarifa_max: 250,
+  zonas: []
+};
+
+async function fetchAppConfig() {
+  try {
+    const res = await fetch('/api/config');
+    if (res.ok) {
+      appConfig = await res.json();
+    }
+  } catch (e) {
+    console.log("Config fallback activa:", e);
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  fetchAppConfig();
   initPassengerMap();
   setupUIEventListeners();
   fetchRealDrivers();
@@ -222,6 +242,11 @@ function setupUIEventListeners() {
 // 4. MOTOR DE DESPACHO AUTOMÁTICO (LADO PASAJERO)
 // =========================================================
 async function solicitarViajeAutomatico() {
+  if (currentSelectedFare < appConfig.tarifa_min || currentSelectedFare > appConfig.tarifa_max) {
+    showToast(`⚠️ Tarifa inválida: debe estar entre C$ ${appConfig.tarifa_min} y C$ ${appConfig.tarifa_max}`);
+    return;
+  }
+
   const lbl = document.getElementById('lblConfirmarPedido');
   const btn = document.getElementById('btnConfirmarPedido');
 

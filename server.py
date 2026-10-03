@@ -336,6 +336,40 @@ def sse_stream():
     )
 
 # =========================================================
+# RUTAS API: CONFIGURACIÓN Y CIUDAD OPERATIVA (CA-9)
+# =========================================================
+@app.route("/api/config", methods=["GET"])
+def get_config():
+    ciudad = os.getenv("CAPONERA_CIUDAD", "Masaya")
+    try:
+        tarifa_min = float(os.getenv("CAPONERA_TARIFA_MIN", "15.0"))
+    except ValueError:
+        tarifa_min = 15.0
+    try:
+        tarifa_max = float(os.getenv("CAPONERA_TARIFA_MAX", "250.0"))
+    except ValueError:
+        tarifa_max = 250.0
+
+    zonas_env = os.getenv("CAPONERA_ZONAS", "")
+    if zonas_env:
+        zonas = [z.strip() for z in zonas_env.split(",") if z.strip()]
+    else:
+        zonas = [
+            f"Mercado Municipal de {ciudad}",
+            f"Parque Central de {ciudad}",
+            f"Malecón de {ciudad}",
+            "Monimbó",
+            "San Jerónimo",
+            "Las 7 Esquinas"
+        ]
+    return jsonify({
+        "ciudad": ciudad,
+        "tarifa_min": tarifa_min,
+        "tarifa_max": tarifa_max,
+        "zonas": zonas
+    })
+
+# =========================================================
 # RUTAS API: CONDUCTORES
 # =========================================================
 @app.route("/api/conductores", methods=["GET"])
@@ -450,6 +484,22 @@ def solicitar_viaje():
         lng_o = float(data.get("lng_origen", data.get("lng", -86.2514)))
     except (TypeError, ValueError):
         return jsonify({"success": False, "error": "Parámetros inválidos"}), 400
+
+    try:
+        tarifa_min = float(os.getenv("CAPONERA_TARIFA_MIN", "15.0"))
+    except ValueError:
+        tarifa_min = 15.0
+    try:
+        tarifa_max = float(os.getenv("CAPONERA_TARIFA_MAX", "250.0"))
+    except ValueError:
+        tarifa_max = 250.0
+
+    if tarifa < tarifa_min or tarifa > tarifa_max:
+        return jsonify({
+            "success": False, 
+            "error": f"Tarifa fuera de rango. Debe estar entre C$ {tarifa_min:.0f} y C$ {tarifa_max:.0f}"
+        }), 400
+
     
     with get_db() as conn:
         cursor = conn.cursor()

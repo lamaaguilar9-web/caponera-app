@@ -55,7 +55,7 @@
             <span class="text-[9px] bg-slate-950 text-amber-300 font-extrabold px-1.5 py-0.5 rounded-md">PRO</span>
           </div>
           <p class="text-[10px] font-bold text-slate-900 flex items-center gap-1">
-            <span class="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span> Red Masaya &bull; En Vivo
+            <span class="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span> Red <span class="city-name-label">Masaya</span> &bull; En Vivo
           </p>
         </div>
       </div>
@@ -405,7 +405,7 @@
       <div>
         <div class="flex justify-between items-center mb-2 px-1">
           <h3 class="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Viajes Solicitados en Masaya
+            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> Viajes Solicitados en <span class="city-name-label">Masaya</span>
           </h3>
           <span id="requestsCount" class="text-[10px] bg-slate-900 border border-slate-800 text-amber-400 font-bold px-2 py-0.5 rounded-full">Sincronizando...</span>
         </div>
@@ -528,6 +528,32 @@
     let userMarker = null;
     let driverMarkers = [];
 
+    let configApp = {
+      ciudad: 'Masaya',
+      tarifa_min: 15,
+      tarifa_max: 250,
+      zonas: []
+    };
+
+    async function cargarConfiguracion() {
+      try {
+        const resp = await fetch('/api/config');
+        if (resp.ok) {
+          configApp = await resp.json();
+          document.querySelectorAll('.city-name-label').forEach(el => {
+            el.textContent = configApp.ciudad;
+          });
+          const inputFare = document.getElementById('inputFare');
+          if (inputFare) {
+            inputFare.min = configApp.tarifa_min;
+            inputFare.max = configApp.tarifa_max;
+          }
+        }
+      } catch (e) {
+        console.log("Config fallback activa");
+      }
+    }
+
     let estado = {
       rolActual: 'pasajero',
       tipoServicio: 'viaje',
@@ -649,14 +675,15 @@
     function ajustarTarifa(delta) {
       const input = document.getElementById('inputFare');
       let valor = parseInt(input.value) || 20;
-      valor = Math.max(15, valor + delta);
+      valor = Math.min(configApp.tarifa_max, Math.max(configApp.tarifa_min, valor + delta));
       input.value = valor;
       estado.tarifa = valor;
     }
 
     function fijarTarifa(valor) {
-      document.getElementById('inputFare').value = valor;
-      estado.tarifa = valor;
+      const clamped = Math.min(configApp.tarifa_max, Math.max(configApp.tarifa_min, valor));
+      document.getElementById('inputFare').value = clamped;
+      estado.tarifa = clamped;
     }
 
     async function solicitarViaje() {
@@ -667,6 +694,11 @@
 
       if (!origen || !destino) {
         alert('Por favor ingresa origen y destino.');
+        return;
+      }
+
+      if (tarifa < configApp.tarifa_min || tarifa > configApp.tarifa_max) {
+        alert(`La tarifa debe estar entre C$ ${configApp.tarifa_min} y C$ ${configApp.tarifa_max}`);
         return;
       }
 
@@ -704,6 +736,10 @@
               localStorage.setItem('caponera_active_trip_token', resData.session_token);
             } catch (err) {}
           }
+        } else {
+          alert(resData.error || "Error al solicitar el viaje");
+          card.classList.add('hidden');
+          return;
         }
       } catch (e) {
         console.log("Modo local/simulado activo:", e);
@@ -793,7 +829,7 @@
       if (estado.viajesDisponibles.length === 0) {
         feed.innerHTML = `
           <div class="p-6 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-3xl">
-            No hay solicitudes activas en este momento en Masaya.
+            No hay solicitudes activas en este momento en <span class="city-name-label">Masaya</span>.
           </div>`;
         return;
       }
@@ -881,6 +917,7 @@
 
     // Inicializar al cargar
     window.addEventListener('DOMContentLoaded', () => {
+      cargarConfiguracion();
       initMap();
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(err => {
