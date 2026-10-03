@@ -4,6 +4,7 @@ import json
 import queue
 import sqlite3
 import datetime
+import hmac
 from typing import List
 from flask import Flask, request, jsonify, send_from_directory, render_template_string, Response
 
@@ -593,6 +594,16 @@ ADMIN_HTML = """
 
 @app.route("/admin")
 def admin_panel():
+    admin_key = os.getenv("CAPONERA_ADMIN_KEY", "").strip()
+    provided_key = (
+        request.args.get("key")
+        or request.headers.get("X-Admin-Key")
+        or request.headers.get("Authorization", "").replace("Bearer ", "")
+    ).strip()
+
+    if not admin_key or not provided_key or not hmac.compare_digest(provided_key, admin_key):
+        return jsonify({"success": False, "error": "Acceso denegado: Llave de administración requerida o inválida"}), 403
+
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM conductores")
