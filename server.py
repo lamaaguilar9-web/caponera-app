@@ -6,6 +6,9 @@ import sqlite3
 import datetime
 import hmac
 import secrets
+import time
+import threading
+from collections import defaultdict
 from typing import List
 from flask import Flask, request, jsonify, send_from_directory, render_template_string, Response
 
@@ -22,6 +25,57 @@ def add_cors(response):
     response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
     response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
     return response
+
+# =========================================================
+# RATE LIMITING & TTL DE VIAJES (CA-6)
+# =========================================================
+def get_client_ip() -> str:
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr or "127.0.0.1")
+    if "," in ip:
+        ip = ip.split(",")[0].strip()
+    return ip.strip()
+
+class InMemoryRateLimiter:
+    def __init__(self, max_requests: int = 5, window_sec: int = 60):
+        self.max_requests = max_requests
+        self.window_sec = window_sec
+        self.requests = defaultdict(list)
+        self.lock = threading.Lock()
+
+    def is_allowed(self, key: str) -> bool:
+        now = time.time()
+        with self.lock:
+            timestamps = self.requests[key]
+            valid = [t for t in timestamps if now - t < self.window_sec]
+            if len(valid) >= self.max_requests:
+                self.requests[key] = valid
+                return False
+            valid.append(now)
+            self.requests[key] = valid
+            return True
+
+viaje_rate_limiter = InMemoryRateLimiter(max_requests=5, window_sec=60)
+recarga_rate_limiter = InMemoryRateLimiter(max_requests=5, window_sec=60)
+
+def purge_expired_trips():
+    """Barre viajes en estado 'buscando' que superan el TTL y los marca como 'expirado' (CA-6)."""
+    try:
+        ttl_sec = int(os.getenv("CAPONERA_VIAJE_TTL_SEC", "900"))
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE viajes
+                SET estado = 'expirado', updated_at = CURRENT_TIMESTAMP
+                WHERE estado = 'buscando'
+                  AND (strftime('%s', 'now') - strftime('%s', created_at)) > ?
+            """, (ttl_sec,))
+            conn.commit()
+    except Exception:
+        pass
+
+@app.before_request
+def before_request_hook():
+    purge_expired_trips()
 
 # =========================================================
 # BUS DE EVENTOS EN MEMORIA (SSE - TIEMPO REAL)
@@ -359,6 +413,10 @@ def update_posicion(conductor_id=None):
 @app.route("/api/viajes/crear", methods=["POST"])
 @app.route("/api/viajes/solicitar", methods=["POST"])
 def solicitar_viaje():
+    client_ip = get_client_ip()
+    if not viaje_rate_limiter.is_allowed(client_ip):
+        return jsonify({"success": False, "error": "Demasiadas solicitudes. Límite de creación de viajes excedido por IP (HTTP 429)"}), 429
+
     data = request.get_json(silent=True) or {}
     pasajero = str(data.get("pasajero_nombre", "Pasajero Express"))[:100]
     origen = str(data.get("origen", "Punto Actual"))[:150]
@@ -581,6 +639,10 @@ def aceptar_viaje(viaje_id):
 # =========================================================
 @app.route("/api/conductor/recarga", methods=["POST"])
 def registrar_recarga():
+    client_ip = get_client_ip()
+    if not recarga_rate_limiter.is_allowed(client_ip):
+        return jsonify({"success": False, "error": "Demasiadas solicitudes de recarga. Intente más tarde (HTTP 429)"}), 429
+
     data = request.get_json(silent=True) or {}
     raw_cid = data.get("conductor_id")
     conductor_id = None

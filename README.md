@@ -121,3 +121,12 @@ docker exec caponera_app sqlite3 /app/caponera.db ".backup '/app/caponera_hotbac
 - **Script de Despliegue Rápido al VPS:** `DESPLEGAR_CAPONERA_VPS.bat` (despliegue seguro vía SCP + restart condicional de Docker).
 - **Pruebas de Despacho:** `test_dispatch.py` (simulación de eventos y verificación de latencia de entrega SSE).
 - **Panel Administrativo:** Disponible localmente en `/admin` con vista de conductores activos y viajes solicitados.
+
+---
+
+## 6. Modelo de Amenazas y Riesgos Residuales Acotados (Auditoría GLM CA-6)
+
+- **Identificadores Secuenciales de Viajes:** Los IDs de viajes en SQLite son enteros secuenciales incrementales (`AUTOINCREMENT`). El riesgo residual de adivinación, scraping o manipulación de estado queda acotado y neutralizado mediante:
+  1. **Control de Autorización Estricto por `session_token`:** Cualquier solicitud de consulta de estado (`/api/viajes/<id>/estado`) o cancelación (`/api/viajes/<id>/cancelar`) exige el `session_token` emitido exclusivamente al creador del viaje. Solicitudes sin token o con token ajeno son rechazadas con HTTP 403 (CA-3 y CA-5).
+  2. **Rate-Limiting por IP:** La API de creación de viajes y recargas implementa un límite de peticiones en memoria por dirección IP (máximo 5 solicitudes/minuto; peticiones adicionales reciben HTTP 429), impidiendo ataques automatizados de denegación de servicio o saturación (CA-6).
+  3. **Purga Automática por TTL (Time-To-Live):** Las carreras en estado `buscando` que no son tomadas dentro de su ventana de validez (configurable mediante `CAPONERA_VIAJE_TTL_SEC`, por defecto 900 segundos / 15 minutos) son marcadas automáticamente como `expirado` en cada petición o barrido periódico, evitando la acumulación de viajes huérfanos (CA-6).
