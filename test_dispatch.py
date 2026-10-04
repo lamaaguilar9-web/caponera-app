@@ -374,8 +374,50 @@ def run_all_tests():
     assert len(case_data["bitacora"]) >= 4
     print("  -> PASÓ: Expediente de caso protegido (403/200), reúne solicitante, conductor y bitácora completa.")
 
+    # ---------------------------------------------------------
+    # CA-13: Contador de Visitas Diario en Panel Admin (Punto 5)
+    # ---------------------------------------------------------
+    print("\n[TEST CA-13] Verificando contador de visitas diario (Punto 5)...")
+    admin_key_val = os.getenv("CAPONERA_ADMIN_KEY", "sentinel_test_admin_key_2026")
+    hoy_str = datetime.date.today().strftime("%Y-%m-%d")
+
+    # Obtener contador actual
+    with server.get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT contador FROM visitas WHERE fecha = ?", (hoy_str,))
+        row_v = cur.fetchone()
+        v_ini = row_v["contador"] if row_v else 0
+
+    # Cargar página principal 3 veces
+    for _ in range(3):
+        r_page = client.get("/")
+        assert r_page.status_code == 200
+
+    # Verificar que aumentó en 3 en la BD
+    with server.get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT contador FROM visitas WHERE fecha = ?", (hoy_str,))
+        row_v2 = cur.fetchone()
+        v_fin = row_v2["contador"] if row_v2 else 0
+        assert v_fin == v_ini + 3, f"Esperado {v_ini + 3}, obtenido {v_fin}"
+
+    # Verificar presencia en panel /admin
+    r_admin = client.get(f"/admin?key={admin_key_val}")
+    assert r_admin.status_code == 200
+    admin_txt = r_admin.get_data(as_text=True)
+    assert "Visitas hoy:" in admin_txt
+    assert "Visitas totales:" in admin_txt
+    assert str(v_fin) in admin_txt
+
+    # Verificar cero exposición en APIs públicas
+    r_cfg = client.get("/api/config")
+    assert "visitas" not in r_cfg.get_json(), "Contador no debe exponerse en /api/config"
+    r_ver = client.get("/api/version")
+    assert "visitas" not in r_ver.get_json(), "Contador no debe exponerse en /api/version"
+    print("  -> PASÓ: Contador de visitas se incrementa en cada recarga de '/', visible solo en /admin con llave.")
+
     print("\n" + "=" * 65)
-    print("[OK] AUDITORIA COMPLETA! TODOS LOS CRITERIOS CA-1 A CA-12 PASARON AL 100%")
+    print("[OK] AUDITORIA COMPLETA! TODOS LOS CRITERIOS CA-1 A CA-13 PASARON AL 100%")
     print("=" * 65)
 
 if __name__ == "__main__":

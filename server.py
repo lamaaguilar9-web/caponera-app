@@ -201,16 +201,34 @@ def init_db():
             )
         """)
         
-        # 4. Registro de Visitas y Analítica
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS visitas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ip TEXT,
-                user_agent TEXT,
-                origen_url TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+        # 4. Contador Diario de Visitas (Punto 5)
+        cursor.execute("PRAGMA table_info(visitas)")
+        visitas_cols = [r[1] for r in cursor.fetchall()]
+        if not visitas_cols:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS visitas (
+                    fecha TEXT PRIMARY KEY,
+                    contador INTEGER DEFAULT 0
+                )
+            """)
+        elif "fecha" not in visitas_cols:
+            cursor.execute("DROP TABLE IF EXISTS visitas_old")
+            cursor.execute("ALTER TABLE visitas RENAME TO visitas_old")
+            cursor.execute("""
+                CREATE TABLE visitas (
+                    fecha TEXT PRIMARY KEY,
+                    contador INTEGER DEFAULT 0
+                )
+            """)
+            try:
+                cursor.execute("""
+                    INSERT OR REPLACE INTO visitas (fecha, contador)
+                    SELECT substr(created_at, 1, 10) as fecha, COUNT(*) as contador
+                    FROM visitas_old
+                    GROUP BY substr(created_at, 1, 10)
+                """)
+            except Exception:
+                pass
 
         # 5. Bitácora de Estados (Caja Negra de Auditoría)
         cursor.execute("""
@@ -298,11 +316,13 @@ def get_authenticated_driver(expected_conductor_id=None):
 @app.route("/")
 def index():
     try:
-        ip = get_client_ip()
-        ua = request.headers.get('User-Agent', '')[:255]
-        ref = (request.referrer or '')[:255]
+        hoy = datetime.date.today().strftime("%Y-%m-%d")
         with get_db() as conn:
-            conn.cursor().execute("INSERT INTO visitas (ip, user_agent, origen_url) VALUES (?, ?, ?)", (ip, ua, ref))
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO visitas (fecha, contador) VALUES (?, 1)
+                ON CONFLICT(fecha) DO UPDATE SET contador = contador + 1
+            """, (hoy,))
             conn.commit()
     except Exception:
         pass
@@ -854,7 +874,14 @@ ADMIN_HTML = """
 </head>
 <body>
   <h1>🛺 Caponera App · Panel de Control</h1>
-  <a href="/" class="btn">📱 Abrir App en Vivo</a>
+  <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 15px; flex-wrap: wrap;">
+    <a href="/" class="btn" style="margin-bottom: 0;">📱 Abrir App en Vivo</a>
+    <div style="background: #131c2e; padding: 8px 16px; border-radius: 8px; border: 1px solid #1e2d4a; font-size: 0.9rem;">
+      <span style="color: #94a3b8; font-weight: 600;">Visitas hoy:</span> <strong style="color: #10b981; font-size: 1rem;">{{ visitas_hoy }}</strong>
+      &nbsp;&nbsp;|&nbsp;&nbsp;
+      <span style="color: #94a3b8; font-weight: 600;">Visitas totales:</span> <strong style="color: #f59e0b; font-size: 1rem;">{{ visitas_totales }}</strong>
+    </div>
+  </div>
   <div class="card">
     <h2>Conductores Registrados</h2>
     <table>
@@ -1071,7 +1098,17 @@ def admin_panel():
         conductores = [dict(r) for r in cursor.fetchall()]
         cursor.execute("SELECT * FROM viajes ORDER BY id DESC LIMIT 10")
         viajes = [dict(r) for r in cursor.fetchall()]
-    return render_template_string(ADMIN_HTML, conductores=conductores, viajes=viajes, admin_key=provided_key)
+
+        hoy = datetime.date.today().strftime("%Y-%m-%d")
+        cursor.execute("SELECT contador FROM visitas WHERE fecha = ?", (hoy,))
+        row_hoy = cursor.fetchone()
+        visitas_hoy = row_hoy["contador"] if row_hoy else 0
+
+        cursor.execute("SELECT SUM(contador) as total FROM visitas")
+        row_total = cursor.fetchone()
+        visitas_totales = row_total["total"] if row_total and row_total["total"] is not None else 0
+
+    return render_template_string(ADMIN_HTML, conductores=conductores, viajes=viajes, admin_key=provided_key, visitas_hoy=visitas_hoy, visitas_totales=visitas_totales)
 
 @app.route("/admin/caso/<int:viaje_id>", methods=["GET"])
 def admin_caso(viaje_id):
