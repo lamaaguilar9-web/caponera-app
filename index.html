@@ -204,6 +204,14 @@
               <i class="fa-solid fa-circle-check text-emerald-400 mr-1"></i> Completar
             </button>
           </div>
+          <!-- Reportar Problema -->
+          <div class="pt-2 border-t border-slate-800/80 flex justify-between items-center text-[11px]">
+            <span class="text-slate-400">¿Inconveniente con el viaje?</span>
+            <a id="btnReportIssue" href="https://wa.me/50589130414?text=Reporte%20problema%20viaje" target="_blank"
+               class="text-rose-400 hover:text-rose-300 font-bold flex items-center gap-1 transition">
+              <i class="fa-solid fa-triangle-exclamation"></i> Reportar problema
+            </a>
+          </div>
         </div>
       </div>
 
@@ -736,6 +744,10 @@
         const resData = await resp.json();
         if (resData.success) {
           estado.viajeActivoId = resData.viaje_id;
+          const btnReport = document.getElementById('btnReportIssue');
+          if (btnReport) {
+            btnReport.href = `https://wa.me/50589130414?text=${encodeURIComponent('Reporte de problema viaje #' + estado.viajeActivoId)}`;
+          }
           if (resData.session_token) {
             try {
               localStorage.setItem(`caponera_token_${estado.viajeActivoId}`, resData.session_token);

@@ -260,6 +260,10 @@ async function solicitarViajeAutomatico() {
     const data = await res.json();
     if (data.success) {
       activeTripId = data.viaje_id;
+      const btnReport = document.getElementById('btnReportIssue');
+      if (btnReport) {
+        btnReport.href = `https://wa.me/50589130414?text=${encodeURIComponent('Reporte de problema viaje #' + activeTripId)}`;
+      }
       if (data.session_token) {
         try {
           localStorage.setItem(`caponera_token_${activeTripId}`, data.session_token);
@@ -374,6 +378,14 @@ function mostrarConfirmacionPasajero(conductor, tarifa) {
            style="display:flex; align-items:center; justify-content:center; gap:8px; width:100%; text-decoration:none; padding:12px; font-weight:700; border-radius:12px; color:#fff; background:rgba(255,255,255,0.1); font-size:0.95rem;">
           📞 Llamar al Celular (${conductor.telefono})
         </a>
+
+        <div style="margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.1); display:flex; justify-content:space-between; align-items:center; font-size:12px;">
+          <span style="color:#94a3b8;">¿Inconveniente con el viaje?</span>
+          <a id="btnReportIssue" href="https://wa.me/50589130414?text=${encodeURIComponent('Reporte de problema viaje #' + (activeTripId || ''))}" target="_blank"
+             style="color:#f43f5e; font-weight:700; text-decoration:none; display:flex; align-items:center; gap:4px;">
+            ⚠️ Reportar problema
+          </a>
+        </div>
       </div>
     `;
   }
