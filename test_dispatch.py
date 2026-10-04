@@ -188,7 +188,8 @@ def run_all_tests():
     res_trip_exp = client.post("/api/viajes/crear", json={"origen": "X", "destino": "Y", "tarifa": 30}, environ_base={"REMOTE_ADDR": "192.168.1.150"})
     trip_exp_id = res_trip_exp.get_json()["viaje_id"]
 
-    # Simular conductor con plan vencido
+    # Simular conductor con plan vencido (con variable apagada = vence con 403)
+    os.environ.pop("PLAN_GRATIS_LAUNCH", None)
     with server.get_db() as conn:
         cur = conn.cursor()
         cur.execute("UPDATE conductores SET plan_expira = '2020-01-01', plan_activo = 1 WHERE id = 1")
@@ -199,12 +200,22 @@ def run_all_tests():
                                      json={"conductor_id": 1})
     assert res_accept_expired.status_code == 403, f"Esperado 403 por plan expirado, obtenido {res_accept_expired.status_code}"
 
-    # Restaurar conductor 1 a fecha futura
+    # Con PLAN_GRATIS_LAUNCH=1, no se desactiva y se permite operar
+    os.environ["PLAN_GRATIS_LAUNCH"] = "1"
+    res_trip_launch = client.post("/api/viajes/crear", json={"origen": "X2", "destino": "Y2", "tarifa": 30}, environ_base={"REMOTE_ADDR": "192.168.1.151"})
+    trip_launch_id = res_trip_launch.get_json()["viaje_id"]
+    res_accept_launch = client.post(f"/api/viajes/{trip_launch_id}/aceptar",
+                                    headers={"X-Driver-Token": driver1_token},
+                                    json={"conductor_id": 1})
+    assert res_accept_launch.status_code == 200, f"Esperado 200 con PLAN_GRATIS_LAUNCH=1, obtenido {res_accept_launch.status_code}"
+
+    # Restaurar conductor 1 a fecha futura y limpiar variable
+    os.environ.pop("PLAN_GRATIS_LAUNCH", None)
     with server.get_db() as conn:
         cur = conn.cursor()
         cur.execute("UPDATE conductores SET plan_expira = '2099-12-31', plan_activo = 1 WHERE id = 1")
         conn.commit()
-    print("  -> PASÓ: Conductores con plan vencido no pueden aceptar viajes (403).")
+    print("  -> PASÓ: Control de vencimiento y bypass con PLAN_GRATIS_LAUNCH=1 verificado.")
 
     # ---------------------------------------------------------
     # CA-8: sw.js funcional y remoción de archivos muertos
@@ -244,7 +255,7 @@ def run_all_tests():
     assert res_ver.status_code == 200
     ver_data = res_ver.get_json()
     assert ver_data["app"] == "caponera-app"
-    assert "version" in ver_data and len(ver_data["version"]) > 0
+    assert ver_data["version"] == "1.2.0-lanzamiento-gratis", f"Esperado 1.2.0-lanzamiento-gratis, obtenido {ver_data['version']}"
 
     res_health = client.get("/health")
     assert res_health.status_code == 200

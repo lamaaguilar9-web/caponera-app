@@ -6,6 +6,7 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=5054
+      - PLAN_GRATIS_LAUNCH=1
     ports:
       - "127.0.0.1:5054:5054"
     volumes:

@@ -187,11 +187,14 @@ def init_db():
         # Insertar conductores iniciales si la tabla está vacía Y CAPONERA_SEED_DEMO == "1"
         cursor.execute("SELECT COUNT(*) FROM conductores")
         if cursor.fetchone()[0] == 0 and os.getenv("CAPONERA_SEED_DEMO", "0") == "1":
-            exp_date = (datetime.datetime.now() + datetime.timedelta(days=15)).strftime("%Y-%m-%d")
+            is_launch_free = os.environ.get("PLAN_GRATIS_LAUNCH", "").strip() == "1"
+            exp_days = 365 if is_launch_free else 15
+            plan_seed_nom = "Lanzamiento (Gratis)" if is_launch_free else "Pionero (15 Días Gratis)"
+            exp_date = (datetime.datetime.now() + datetime.timedelta(days=exp_days)).strftime("%Y-%m-%d")
             initial_drivers = [
-                ("José Ramón", "50589130414", "Unidad #7 · Caponera Express", secrets.token_hex(16), 12.1370, -86.2520, 1, 1, "Pionero (15 Días Gratis)", exp_date, 1),
-                ("Alex Mendoza", "50588881111", "Caponera #14 (Tarifa Básica)", secrets.token_hex(16), 12.1390, -86.2490, 1, 1, "Pionero (15 Días Gratis)", exp_date, 1),
-                ("María González", "50588882222", "Moto Taxi #09", secrets.token_hex(16), 12.1340, -86.2540, 1, 1, "Pionero (15 Días Gratis)", exp_date, 1)
+                ("José Ramón", "50589130414", "Unidad #7 · Caponera Express", secrets.token_hex(16), 12.1370, -86.2520, 1, 1, plan_seed_nom, exp_date, 1),
+                ("Alex Mendoza", "50588881111", "Caponera #14 (Tarifa Básica)", secrets.token_hex(16), 12.1390, -86.2490, 1, 1, plan_seed_nom, exp_date, 1),
+                ("María González", "50588882222", "Moto Taxi #09", secrets.token_hex(16), 12.1340, -86.2540, 1, 1, plan_seed_nom, exp_date, 1)
             ]
             cursor.executemany("""
                 INSERT INTO conductores (nombre, telefono, unidad, driver_token, lat, lng, is_online, plan_activo, plan_nombre, plan_expira, is_demo)
@@ -274,6 +277,14 @@ def service_worker():
 def get_app_version():
     if os.getenv("APP_VERSION"):
         return os.getenv("APP_VERSION")
+    if os.path.exists("version.txt"):
+        try:
+            with open("version.txt", "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if content:
+                    return content
+        except Exception:
+            pass
     try:
         import subprocess
         ver = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL).decode("utf-8").strip()
@@ -281,12 +292,6 @@ def get_app_version():
             return ver
     except Exception:
         pass
-    if os.path.exists("version.txt"):
-        try:
-            with open("version.txt", "r", encoding="utf-8") as f:
-                return f.read().strip()
-        except Exception:
-            pass
     return "1.0.0-hardened"
 
 @app.route("/api/version", methods=["GET"])
@@ -353,13 +358,21 @@ def get_conductores():
     
     with get_db() as conn:
         cursor = conn.cursor()
-        query = """
-            SELECT id, nombre, unidad, lat, lng, is_online, plan_activo, plan_expira, is_demo 
-            FROM conductores 
-            WHERE is_online = 1 
-              AND plan_activo = 1
-              AND (plan_expira IS NULL OR date(plan_expira) >= date('now'))
-        """
+        is_launch_free = os.environ.get("PLAN_GRATIS_LAUNCH", "").strip() == "1"
+        if is_launch_free:
+            query = """
+                SELECT id, nombre, unidad, lat, lng, is_online, plan_activo, plan_expira, is_demo 
+                FROM conductores 
+                WHERE is_online = 1
+            """
+        else:
+            query = """
+                SELECT id, nombre, unidad, lat, lng, is_online, plan_activo, plan_expira, is_demo 
+                FROM conductores 
+                WHERE is_online = 1 
+                  AND plan_activo = 1
+                  AND (plan_expira IS NULL OR date(plan_expira) >= date('now'))
+            """
         if not seed_demo:
             query += " AND (is_demo IS NULL OR is_demo = 0)"
 
@@ -628,20 +641,22 @@ def aceptar_viaje(viaje_id):
     conductor_id = driver["id"]
 
     # Validar que el plan del conductor esté activo y no expirado (CA-7)
-    if driver.get("plan_activo") != 1:
-        return jsonify({"success": False, "error": "Acceso denegado: El plan del conductor está inactivo"}), 403
+    is_launch_free = os.environ.get("PLAN_GRATIS_LAUNCH", "").strip() == "1"
+    if not is_launch_free:
+        if driver.get("plan_activo") != 1:
+            return jsonify({"success": False, "error": "Acceso denegado: El plan del conductor está inactivo"}), 403
 
-    plan_exp = driver.get("plan_expira")
-    if plan_exp:
-        try:
-            exp_d = datetime.datetime.strptime(str(plan_exp)[:10], "%Y-%m-%d").date()
-            if exp_d < datetime.date.today():
-                with get_db() as c_up:
-                    c_up.cursor().execute("UPDATE conductores SET plan_activo = 0 WHERE id = ?", (conductor_id,))
-                    c_up.commit()
-                return jsonify({"success": False, "error": "Acceso denegado: El plan del conductor ha expirado"}), 403
-        except Exception:
-            pass
+        plan_exp = driver.get("plan_expira")
+        if plan_exp:
+            try:
+                exp_d = datetime.datetime.strptime(str(plan_exp)[:10], "%Y-%m-%d").date()
+                if exp_d < datetime.date.today():
+                    with get_db() as c_up:
+                        c_up.cursor().execute("UPDATE conductores SET plan_activo = 0 WHERE id = ?", (conductor_id,))
+                        c_up.commit()
+                    return jsonify({"success": False, "error": "Acceso denegado: El plan del conductor ha expirado"}), 403
+            except Exception:
+                pass
     
     with get_db() as conn:
         cursor = conn.cursor()
