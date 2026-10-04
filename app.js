@@ -247,6 +247,8 @@ async function solicitarViajeAutomatico() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        pasajero_nombre: (document.getElementById('inputPassengerName')?.value || 'Pasajero Express').trim(),
+        cliente_telefono: (document.getElementById('inputPassengerPhone')?.value || '50589130414').trim(),
         origen: userOrigin,
         destino: userDestino,
         tarifa: currentSelectedFare,

@@ -1,4 +1,5 @@
 import os
+import re
 import math
 import json
 import queue
@@ -142,6 +143,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_token TEXT,
                 pasajero_nombre TEXT DEFAULT 'Pasajero Express',
+                cliente_telefono TEXT DEFAULT '',
                 origen TEXT NOT NULL,
                 destino TEXT NOT NULL,
                 tarifa REAL NOT NULL,
@@ -156,6 +158,11 @@ def init_db():
         """)
         try:
             cursor.execute("ALTER TABLE viajes ADD COLUMN session_token TEXT;")
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            cursor.execute("ALTER TABLE viajes ADD COLUMN cliente_telefono TEXT DEFAULT '';")
         except sqlite3.OperationalError:
             pass
         
@@ -450,10 +457,17 @@ def solicitar_viaje():
 
     data = request.get_json(silent=True) or {}
     pasajero = str(data.get("pasajero_nombre", "Pasajero Express"))[:100]
+    cliente_telefono = str(data.get("cliente_telefono") or data.get("telefono") or data.get("whatsapp") or "").strip()
     origen = str(data.get("origen", "Punto Actual"))[:150]
     destino = str(data.get("destino", "Destino Indicado"))[:150]
     # Token criptográfico de sesión para autorización de cancelación (Cero IDOR)
     session_token = str(data.get("session_token") or os.urandom(16).hex())
+
+    if not cliente_telefono:
+        return jsonify({"success": False, "error": "El número de teléfono/WhatsApp del pasajero es obligatorio"}), 400
+
+    if not re.match(r'^(\+?505)?[2578]\d{7}$', cliente_telefono):
+        return jsonify({"success": False, "error": "Número de teléfono/WhatsApp inválido. Ingrese 8 dígitos válidos"}), 400
     
     try:
         tarifa = float(data.get("tarifa", 35.0))
@@ -481,9 +495,9 @@ def solicitar_viaje():
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO viajes (session_token, pasajero_nombre, origen, destino, tarifa, lat_origen, lng_origen, estado)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'buscando')
-        """, (session_token, pasajero, origen, destino, tarifa, lat_o, lng_o))
+            INSERT INTO viajes (session_token, pasajero_nombre, cliente_telefono, origen, destino, tarifa, lat_origen, lng_origen, estado)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'buscando')
+        """, (session_token, pasajero, cliente_telefono, origen, destino, tarifa, lat_o, lng_o))
         viaje_id = cursor.lastrowid
         conn.commit()
 
@@ -503,12 +517,14 @@ def get_estado_viaje(viaje_id):
         or request.args.get("session_token")
         or ""
     ).strip()
+    driver_token = (request.headers.get("X-Driver-Token") or "").strip()
 
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT v.id, v.session_token, v.estado, v.tarifa, v.origen, v.destino, v.conductor_id,
-                   c.id as cond_id, c.nombre as conductor_nombre, c.telefono as conductor_telefono, c.unidad as conductor_unidad
+            SELECT v.id, v.session_token, v.estado, v.tarifa, v.origen, v.destino, v.conductor_id, v.cliente_telefono,
+                   c.id as cond_id, c.nombre as conductor_nombre, c.telefono as conductor_telefono, c.unidad as conductor_unidad,
+                   c.driver_token as cond_driver_token
             FROM viajes v
             LEFT JOIN conductores c ON v.conductor_id = c.id
             WHERE v.id = ?
@@ -519,8 +535,13 @@ def get_estado_viaje(viaje_id):
         return jsonify({"success": False, "error": "Viaje no encontrado"}), 404
 
     reg_token = (row["session_token"] or "").strip()
-    if not token or not reg_token or not hmac.compare_digest(token, reg_token):
-        return jsonify({"success": False, "error": "UNAUTHORIZED: Token de sesión requerido o inválido para consultar estado del viaje"}), 403
+    cond_driver_token = (row["cond_driver_token"] or "").strip()
+
+    is_passenger = bool(token and reg_token and hmac.compare_digest(token, reg_token))
+    is_assigned_driver = bool(driver_token and cond_driver_token and hmac.compare_digest(driver_token, cond_driver_token) and row["conductor_id"])
+
+    if not is_passenger and not is_assigned_driver:
+        return jsonify({"success": False, "error": "UNAUTHORIZED: Token de sesión o conductor requerido o inválido para consultar estado del viaje"}), 403
     
     conductor_obj = None
     if row["conductor_id"]:
@@ -544,6 +565,9 @@ def get_estado_viaje(viaje_id):
         "conductor": conductor_obj,
         "success": True
     }
+    # El teléfono del cliente se muestra SOLO al conductor que aceptó ese viaje
+    if is_assigned_driver:
+        res["cliente_telefono"] = row["cliente_telefono"]
     return jsonify(res)
 
 @app.route("/api/viajes/<int:viaje_id>/cancelar", methods=["POST"])
@@ -675,10 +699,15 @@ def aceptar_viaje(viaje_id):
         cond_row = cursor.fetchone()
         cond_data = dict(cond_row) if cond_row else {}
 
+        cursor.execute("SELECT cliente_telefono FROM viajes WHERE id = ?", (viaje_id,))
+        viaje_row = cursor.fetchone()
+        cliente_tel = viaje_row["cliente_telefono"] if viaje_row else ""
+
     return jsonify({
         "success": True, 
         "mensaje": "¡Viaje asignado con éxito! Dirígete al punto de recogida.",
-        "conductor": cond_data
+        "conductor": cond_data,
+        "cliente_telefono": cliente_tel
     })
 
 # =========================================================

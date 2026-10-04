@@ -145,6 +145,12 @@
             class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-amber-400 transition" />
         </div>
 
+        <div>
+          <label class="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">WhatsApp / Teléfono (Obligatorio para recogida)</label>
+          <input id="inputPassengerPhone" type="tel" placeholder="Ej: 88887777 o +50588887777" value="50589130414"
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-amber-400 transition" />
+        </div>
+
         <!-- Botón Solicitar Caponera -->
         <button id="btnRequestTrip" onclick="solicitarViaje()" class="w-full mt-1 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black py-3.5 rounded-2xl text-sm transition shadow-lg shadow-amber-500/25 active:scale-[0.98] flex items-center justify-center gap-2">
           <i class="fa-solid fa-paper-plane"></i> PEDIR CAPONERA AHORA
@@ -683,10 +689,16 @@
       const origen = document.getElementById('inputOrigin').value.trim();
       const destino = document.getElementById('inputDestination').value.trim();
       const cliente = document.getElementById('inputPassengerName').value.trim() || 'Pasajero Express';
+      const telefono = (document.getElementById('inputPassengerPhone')?.value || '').trim();
       const tarifa = parseInt(document.getElementById('inputFare').value) || 30;
 
       if (!origen || !destino) {
         alert('Por favor ingresa origen y destino.');
+        return;
+      }
+
+      if (!telefono) {
+        alert('Por favor ingresa tu número de WhatsApp o teléfono para la recogida.');
         return;
       }
 
@@ -713,6 +725,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             pasajero_nombre: cliente,
+            cliente_telefono: telefono,
             origen: origen,
             destino: destino,
             tarifa: tarifa,

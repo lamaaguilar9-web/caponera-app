@@ -72,6 +72,7 @@ def run_all_tests():
     session_token_1 = secrets.token_hex(16)
     res_trip = client.post("/api/viajes/crear", json={
         "pasajero_nombre": "Test IDOR",
+        "cliente_telefono": "88881111",
         "origen": "Parque Central",
         "destino": "Mercado",
         "tarifa": 30.0,
@@ -94,11 +95,32 @@ def run_all_tests():
     print("  -> PASÓ: Cancelación exige estrictamente session_token coincidente (Cero IDOR).")
 
     # ---------------------------------------------------------
-    # CA-4: session_token generado y devuelto al frontend
+    # CA-4: session_token generado y validación obligatoria de cliente_telefono
     # ---------------------------------------------------------
-    print("\n[TEST CA-4] Verificando entrega de session_token en creación de viaje...")
+    print("\n[TEST CA-4] Verificando validación de cliente_telefono y entrega de session_token...")
+    # Intento sin teléfono -> 400
+    res_no_tel = client.post("/api/viajes/crear", json={
+        "pasajero_nombre": "Test Sin Tel",
+        "origen": "Calle Real",
+        "destino": "Estación",
+        "tarifa": 25.0
+    }, environ_base={"REMOTE_ADDR": "192.168.1.102"})
+    assert res_no_tel.status_code == 400, f"Esperado 400 sin teléfono, obtenido {res_no_tel.status_code}"
+
+    # Intento con teléfono inválido (formato erróneo) -> 400
+    res_bad_tel = client.post("/api/viajes/crear", json={
+        "pasajero_nombre": "Test Tel Malo",
+        "cliente_telefono": "12345",
+        "origen": "Calle Real",
+        "destino": "Estación",
+        "tarifa": 25.0
+    }, environ_base={"REMOTE_ADDR": "192.168.1.102"})
+    assert res_bad_tel.status_code == 400, f"Esperado 400 con teléfono inválido, obtenido {res_bad_tel.status_code}"
+
+    # Creación exitosa con teléfono nicaragüense válido
     res_trip2 = client.post("/api/viajes/crear", json={
         "pasajero_nombre": "Test CA4",
+        "cliente_telefono": "88882222",
         "origen": "Calle Real",
         "destino": "Estación",
         "tarifa": 25.0
@@ -108,12 +130,12 @@ def run_all_tests():
     assert "session_token" in data2 and len(data2["session_token"]) >= 16
     trip2_id = data2["viaje_id"]
     trip2_token = data2["session_token"]
-    print(f"  -> PASÓ: session_token generado ({trip2_token[:8]}...) y listo para persistir en frontend.")
+    print(f"  -> PASÓ: Teléfono validado obligatoriamente y session_token generado ({trip2_token[:8]}...).")
 
     # ---------------------------------------------------------
-    # CA-5: Teléfonos fuera de API pública y privacidad en /estado
+    # CA-5: Teléfonos fuera de API pública y visibilidad exclusiva al conductor asignado
     # ---------------------------------------------------------
-    print("\n[TEST CA-5] Verificando privacidad de teléfonos (Zero-PII)...")
+    print("\n[TEST CA-5] Verificando privacidad de teléfonos (Zero-PII) y visibilidad de cliente_telefono...")
     res_activos = client.get("/api/conductores/activos")
     assert res_activos.status_code == 200
     conductores_list = res_activos.get_json()
@@ -123,22 +145,35 @@ def run_all_tests():
         assert "name" not in c, "El alias heredado 'name' fue removido"
         assert "unit" not in c, "El alias heredado 'unit' fue removido"
 
-    # Conductor 1 acepta el viaje 2
+    # Verificar que viajes_pendientes NO expone cliente_telefono
+    res_pendientes = client.get("/api/conductor/viajes-pendientes?conductor_id=1", headers={"X-Driver-Token": driver1_token})
+    assert res_pendientes.status_code == 200
+    for v_pend in res_pendientes.get_json():
+        assert "cliente_telefono" not in v_pend, "cliente_telefono NO debe aparecer en viajes-pendientes"
+
+    # Conductor 1 acepta el viaje 2 -> la respuesta debe incluir cliente_telefono para coordinar
     res_ac = client.post(f"/api/viajes/{trip2_id}/aceptar", 
                          headers={"X-Driver-Token": driver1_token}, 
                          json={"conductor_id": 1})
     assert res_ac.status_code == 200
+    assert res_ac.get_json().get("cliente_telefono") == "88882222", "El conductor que aceptó debe recibir cliente_telefono"
 
     # Consultar /api/viajes/<id>/estado sin token -> 403
     res_est_no_tok = client.get(f"/api/viajes/{trip2_id}/estado")
     assert res_est_no_tok.status_code == 403, f"Esperado 403 sin token en estado, obtenido {res_est_no_tok.status_code}"
 
-    # Consultar con token correcto -> 200 y teléfono accesible para el pasajero legítimo
+    # Consultar con token del pasajero -> 200, ve datos del conductor, pero NO expone cliente_telefono a terceros
     res_est_ok = client.get(f"/api/viajes/{trip2_id}/estado?session_token={trip2_token}")
     assert res_est_ok.status_code == 200
     est_data = res_est_ok.get_json()
     assert est_data["conductor"]["telefono"] is not None
-    print("  -> PASÓ: Teléfonos removidos de listas públicas; protegidos por session_token en /estado.")
+    assert "cliente_telefono" not in est_data, "cliente_telefono no debe ser devuelto en consulta del pasajero"
+
+    # Consultar con X-Driver-Token del conductor asignado -> 200 y ve cliente_telefono
+    res_est_driver = client.get(f"/api/viajes/{trip2_id}/estado", headers={"X-Driver-Token": driver1_token})
+    assert res_est_driver.status_code == 200
+    assert res_est_driver.get_json().get("cliente_telefono") == "88882222"
+    print("  -> PASÓ: Teléfonos protegidos; cliente_telefono visible exclusivamente al conductor asignado.")
 
     # ---------------------------------------------------------
     # CA-6: Rate Limiting y Expiración TTL de Viajes
@@ -146,21 +181,21 @@ def run_all_tests():
     print("\n[TEST CA-6] Verificando Rate Limiter (HTTP 429) y TTL Sweeper...")
     test_ip = "192.168.1.200"
     for i in range(5):
-        r = client.post("/api/viajes/crear", json={"origen": "A", "destino": "B", "tarifa": 20}, environ_base={"REMOTE_ADDR": test_ip})
+        r = client.post("/api/viajes/crear", json={"origen": "A", "destino": "B", "tarifa": 20, "cliente_telefono": "88883333"}, environ_base={"REMOTE_ADDR": test_ip})
         assert r.status_code == 200, f"Petición {i+1} debe permitirse"
     
     # La sexta solicitud consecutiva debe dar 429
-    r_burst = client.post("/api/viajes/crear", json={"origen": "A", "destino": "B", "tarifa": 20}, environ_base={"REMOTE_ADDR": test_ip})
+    r_burst = client.post("/api/viajes/crear", json={"origen": "A", "destino": "B", "tarifa": 20, "cliente_telefono": "88883333"}, environ_base={"REMOTE_ADDR": test_ip})
     assert r_burst.status_code == 429, f"Esperado 429 por rate limit, obtenido {r_burst.status_code}"
 
     # Verificación P6: Ráfaga con cabecera X-Forwarded-For falsificada (mitigación de IP spoofing)
     spoofed_proxy_ip = "192.168.1.250"
     for i in range(5):
         headers = {"X-Forwarded-For": f"10.99.{i}.1, {spoofed_proxy_ip}"}
-        r = client.post("/api/viajes/crear", json={"origen": "A", "destino": "B", "tarifa": 20}, headers=headers)
+        r = client.post("/api/viajes/crear", json={"origen": "A", "destino": "B", "tarifa": 20, "cliente_telefono": "88883333"}, headers=headers)
         assert r.status_code == 200, f"Petición spoofed {i+1} debe permitirse"
     
-    r_spoofed_burst = client.post("/api/viajes/crear", json={"origen": "A", "destino": "B", "tarifa": 20}, 
+    r_spoofed_burst = client.post("/api/viajes/crear", json={"origen": "A", "destino": "B", "tarifa": 20, "cliente_telefono": "88883333"}, 
                                   headers={"X-Forwarded-For": f"10.99.99.99, {spoofed_proxy_ip}"})
     assert r_spoofed_burst.status_code == 429, f"Esperado 429 mitigando spoofing en X-Forwarded-For, obtenido {r_spoofed_burst.status_code}"
     
@@ -168,7 +203,7 @@ def run_all_tests():
     with server.get_db() as conn:
         cur = conn.cursor()
         old_time = (datetime.datetime.now() - datetime.timedelta(seconds=1000)).strftime("%Y-%m-%d %H:%M:%S")
-        cur.execute("INSERT INTO viajes (origen, destino, tarifa, estado, created_at) VALUES ('OldA', 'OldB', 20, 'buscando', ?)", (old_time,))
+        cur.execute("INSERT INTO viajes (origen, destino, tarifa, cliente_telefono, estado, created_at) VALUES ('OldA', 'OldB', 20, '88883333', 'buscando', ?)", (old_time,))
         old_id = cur.lastrowid
         conn.commit()
 
@@ -185,7 +220,7 @@ def run_all_tests():
     # ---------------------------------------------------------
     print("\n[TEST CA-7] Verificando aislamiento de semilla demo y vencimiento de plan...")
     # Crear viaje para probar aceptación con conductor expirado
-    res_trip_exp = client.post("/api/viajes/crear", json={"origen": "X", "destino": "Y", "tarifa": 30}, environ_base={"REMOTE_ADDR": "192.168.1.150"})
+    res_trip_exp = client.post("/api/viajes/crear", json={"origen": "X", "destino": "Y", "tarifa": 30, "cliente_telefono": "88884444"}, environ_base={"REMOTE_ADDR": "192.168.1.150"})
     trip_exp_id = res_trip_exp.get_json()["viaje_id"]
 
     # Simular conductor con plan vencido (con variable apagada = vence con 403)
@@ -202,7 +237,7 @@ def run_all_tests():
 
     # Con PLAN_GRATIS_LAUNCH=1, no se desactiva y se permite operar
     os.environ["PLAN_GRATIS_LAUNCH"] = "1"
-    res_trip_launch = client.post("/api/viajes/crear", json={"origen": "X2", "destino": "Y2", "tarifa": 30}, environ_base={"REMOTE_ADDR": "192.168.1.151"})
+    res_trip_launch = client.post("/api/viajes/crear", json={"origen": "X2", "destino": "Y2", "tarifa": 30, "cliente_telefono": "88885555"}, environ_base={"REMOTE_ADDR": "192.168.1.151"})
     trip_launch_id = res_trip_launch.get_json()["viaje_id"]
     res_accept_launch = client.post(f"/api/viajes/{trip_launch_id}/aceptar",
                                     headers={"X-Driver-Token": driver1_token},
@@ -239,11 +274,11 @@ def run_all_tests():
     assert cfg["tarifa_max"] == 250.0
 
     # Tarifa menor al mínimo (C$ 10 < 15) -> 400
-    res_low = client.post("/api/viajes/crear", json={"tarifa": 10.0}, environ_base={"REMOTE_ADDR": "192.168.1.180"})
+    res_low = client.post("/api/viajes/crear", json={"tarifa": 10.0, "cliente_telefono": "88886666"}, environ_base={"REMOTE_ADDR": "192.168.1.180"})
     assert res_low.status_code == 400, f"Esperado 400 por tarifa baja, obtenido {res_low.status_code}"
 
     # Tarifa mayor al máximo (C$ 300 > 250) -> 400
-    res_high = client.post("/api/viajes/crear", json={"tarifa": 300.0}, environ_base={"REMOTE_ADDR": "192.168.1.181"})
+    res_high = client.post("/api/viajes/crear", json={"tarifa": 300.0, "cliente_telefono": "88886666"}, environ_base={"REMOTE_ADDR": "192.168.1.181"})
     assert res_high.status_code == 400, f"Esperado 400 por tarifa excesiva, obtenido {res_high.status_code}"
     print("  -> PASÓ: /api/config responde correctamente y backend rechaza tarifas fuera de rango.")
 
