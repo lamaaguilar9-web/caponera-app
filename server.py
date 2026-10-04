@@ -65,6 +65,19 @@ class InMemoryRateLimiter:
 viaje_rate_limiter = InMemoryRateLimiter(max_requests=5, window_sec=60)
 recarga_rate_limiter = InMemoryRateLimiter(max_requests=5, window_sec=60)
 
+def registrar_evento_bitacora(viaje_id: int, anterior: str, nuevo: str, actor: str = "sistema", detalles: str = ""):
+    """Registra de forma inmutable cada cambio de estado en la tabla bitacora_estados (caja negra de auditoría)."""
+    try:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO bitacora_estados (viaje_id, estado_anterior, estado_nuevo, actor, detalles)
+                VALUES (?, ?, ?, ?, ?)
+            """, (viaje_id, anterior, nuevo, actor, detalles))
+            conn.commit()
+    except Exception:
+        pass
+
 def purge_expired_trips():
     """Barre viajes en estado 'buscando' que superan el TTL y los marca como 'expirado' (CA-6)."""
     try:
@@ -72,12 +85,20 @@ def purge_expired_trips():
         with get_db() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                UPDATE viajes
-                SET estado = 'expirado', updated_at = CURRENT_TIMESTAMP
+                SELECT id FROM viajes
                 WHERE estado = 'buscando'
                   AND (strftime('%s', 'now') - strftime('%s', created_at)) > ?
             """, (ttl_sec,))
-            conn.commit()
+            expired_ids = [r["id"] for r in cursor.fetchall()]
+            if expired_ids:
+                cursor.execute("""
+                    UPDATE viajes
+                    SET estado = 'expirado', updated_at = CURRENT_TIMESTAMP
+                    WHERE id IN ({})
+                """.format(",".join("?" * len(expired_ids))), expired_ids)
+                conn.commit()
+                for x_id in expired_ids:
+                    registrar_evento_bitacora(x_id, "buscando", "expirado", actor="sistema", detalles="TTL de búsqueda expirado")
     except Exception:
         pass
 
@@ -188,6 +209,20 @@ def init_db():
                 user_agent TEXT,
                 origen_url TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # 5. Bitácora de Estados (Caja Negra de Auditoría)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bitacora_estados (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                viaje_id INTEGER NOT NULL,
+                estado_anterior TEXT,
+                estado_nuevo TEXT NOT NULL,
+                actor TEXT DEFAULT 'sistema',
+                detalles TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (viaje_id) REFERENCES viajes(id)
             )
         """)
         
@@ -501,6 +536,8 @@ def solicitar_viaje():
         viaje_id = cursor.lastrowid
         conn.commit()
 
+    registrar_evento_bitacora(viaje_id, None, "buscando", actor="pasajero", detalles=f"Viaje solicitado por {pasajero}")
+
     return jsonify({
         "success": True, 
         "viaje_id": viaje_id,
@@ -594,7 +631,7 @@ def cancelar_viaje(viaje_id=None):
 
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT session_token FROM viajes WHERE id = ?", (viaje_id,))
+        cursor.execute("SELECT session_token, estado FROM viajes WHERE id = ?", (viaje_id,))
         row = cursor.fetchone()
         if not row:
             return jsonify({"success": False, "error": "Viaje no encontrado"}), 404
@@ -604,12 +641,15 @@ def cancelar_viaje(viaje_id=None):
         if not reg_token or not hmac.compare_digest(token, reg_token):
             return jsonify({"success": False, "error": "UNAUTHORIZED: Token de sesión no coincide con el emisor del viaje"}), 403
 
+        prev_estado = row["estado"]
         cursor.execute("""
             UPDATE viajes 
             SET estado = 'cancelado', lat_origen = NULL, lng_origen = NULL, updated_at = CURRENT_TIMESTAMP
             WHERE id = ? AND estado IN ('buscando', 'aceptado')
         """, (viaje_id,))
         conn.commit()
+
+    registrar_evento_bitacora(viaje_id, prev_estado, "cancelado", actor="pasajero", detalles="Cancelado por pasajero con session_token")
 
     return jsonify({"success": True, "mensaje": "Viaje cancelado exitosamente"})
 
@@ -703,12 +743,50 @@ def aceptar_viaje(viaje_id):
         viaje_row = cursor.fetchone()
         cliente_tel = viaje_row["cliente_telefono"] if viaje_row else ""
 
+    registrar_evento_bitacora(viaje_id, "buscando", "aceptado", actor="conductor", detalles=f"Aceptado por {cond_data.get('nombre', 'Conductor')} (ID {conductor_id})")
+
     return jsonify({
         "success": True, 
         "mensaje": "¡Viaje asignado con éxito! Dirígete al punto de recogida.",
         "conductor": cond_data,
         "cliente_telefono": cliente_tel
     })
+
+@app.route("/api/viajes/<int:viaje_id>/actualizar-estado", methods=["POST"])
+def actualizar_estado_viaje(viaje_id):
+    data = request.get_json(silent=True) or {}
+    nuevo_estado = (data.get("estado") or "").strip().lower()
+    estados_validos = {"buscando", "aceptado", "en_camino", "completado", "cancelado"}
+    if nuevo_estado not in estados_validos:
+        return jsonify({"success": False, "error": f"Estado inválido. Opciones: {list(estados_validos)}"}), 400
+
+    token_conductor = request.headers.get("X-Driver-Token", "").strip()
+    token_sesion = (request.headers.get("X-Session-Token") or str(data.get("session_token", ""))).strip()
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM viajes WHERE id = ?", (viaje_id,))
+        v = cursor.fetchone()
+        if not v:
+            return jsonify({"success": False, "error": "Viaje no encontrado"}), 404
+
+        actor = "desconocido"
+        if token_conductor:
+            driver, auth_err = get_authenticated_driver(v["conductor_id"])
+            if auth_err:
+                return auth_err
+            actor = f"conductor:{driver['nombre']}"
+        elif token_sesion and v["session_token"] and hmac.compare_digest(token_sesion, v["session_token"]):
+            actor = "pasajero"
+        else:
+            return jsonify({"success": False, "error": "No autorizado para cambiar el estado de este viaje"}), 403
+
+        estado_ant = v["estado"]
+        cursor.execute("UPDATE viajes SET estado = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (nuevo_estado, viaje_id))
+        conn.commit()
+
+    registrar_evento_bitacora(viaje_id, estado_ant, nuevo_estado, actor=actor, detalles=f"Transición a {nuevo_estado}")
+    return jsonify({"success": True, "estado": nuevo_estado, "mensaje": f"Estado actualizado a {nuevo_estado}"})
 
 # =========================================================
 # RUTAS API: RECARGAS BANPRO
@@ -802,7 +880,7 @@ ADMIN_HTML = """
     <h2>Últimos Viajes Solicitados</h2>
     <table>
       <thead>
-        <tr><th>ID</th><th>Pasajero</th><th>Origen ➔ Destino</th><th>Tarifa</th><th>Estado</th></tr>
+        <tr><th>ID</th><th>Pasajero</th><th>Origen ➔ Destino</th><th>Tarifa</th><th>Estado</th><th>Expediente</th></tr>
       </thead>
       <tbody>
         {% for v in viajes %}
@@ -812,11 +890,165 @@ ADMIN_HTML = """
           <td>{{ v.origen }} ➔ {{ v.destino }}</td>
           <td>C$ {{ v.tarifa }}</td>
           <td><span class="badge badge-warning">{{ v.estado }}</span></td>
+          <td><a href="/admin/caso/{{ v.id }}?key={{ admin_key }}" style="color: #38bdf8; text-decoration: none; font-weight: bold;">Ver Caso</a></td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+</body>
+</html>
+"""
+
+CASE_DOSSIER_HTML = """
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Expediente de Caso #{{ viaje.id }} - Caponera App Admin</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #090d16; color: #f8fafc; margin: 0; padding: 24px; }
+    .container { max-width: 900px; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; padding-bottom: 16px; margin-bottom: 24px; }
+    h1 { margin: 0; font-size: 1.5rem; color: #f59e0b; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 9999px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+    .badge-buscando { background: #0284c7; color: #fff; }
+    .badge-aceptado { background: #d97706; color: #fff; }
+    .badge-en_camino { background: #6366f1; color: #fff; }
+    .badge-completado { background: #059669; color: #fff; }
+    .badge-cancelado { background: #dc2626; color: #fff; }
+    .badge-expirado { background: #475569; color: #fff; }
+    .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; padding: 18px; margin-bottom: 18px; }
+    h2 { font-size: 1rem; color: #cbd5e1; margin-top: 0; border-bottom: 1px solid #334155; padding-bottom: 8px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .field-label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 4px; }
+    .field-value { font-size: 0.95rem; font-weight: 600; color: #f1f5f9; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.85rem; }
+    th, td { text-align: left; padding: 10px; border-bottom: 1px solid #1e293b; }
+    th { color: #94a3b8; font-weight: 600; }
+    .btn { display: inline-block; background: #334155; color: #fff; text-decoration: none; padding: 8px 14px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; }
+    .btn:hover { background: #475569; }
+    .dossier-box { background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; color: #94a3b8; max-height: 200px; overflow-y: auto; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div>
+      <h1>Expediente de Caso #{{ viaje.id }}</h1>
+      <span style="font-size: 0.8rem; color: #94a3b8;">Fecha creación: {{ viaje.created_at }}</span>
+    </div>
+    <div>
+      <span class="badge badge-{{ viaje.estado }}">{{ viaje.estado }}</span>
+      <a href="/admin?key={{ admin_key }}" class="btn" style="margin-left: 10px;">← Volver al Panel</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>1. Pasajero y Datos de la Carrera</h2>
+    <div class="grid">
+      <div>
+        <span class="field-label">Nombre del Pasajero</span>
+        <span class="field-value">{{ viaje.pasajero_nombre or 'No especificado' }}</span>
+      </div>
+      <div>
+        <span class="field-label">WhatsApp / Teléfono Pasajero (Privado Admin)</span>
+        <span class="field-value">
+          {% if viaje.cliente_telefono %}
+            <a href="https://wa.me/{{ viaje.cliente_telefono }}" target="_blank" style="color: #f59e0b;">{{ viaje.cliente_telefono }}</a>
+          {% else %}
+            <span style="color: #64748b;">No registrado</span>
+          {% endif %}
+        </span>
+      </div>
+      <div>
+        <span class="field-label">Tarifa Acordada</span>
+        <span class="field-value" style="color: #10b981;">C$ {{ viaje.tarifa }}</span>
+      </div>
+    </div>
+    <div class="grid" style="margin-top: 10px;">
+      <div>
+        <span class="field-label">Punto de Recogida (Origen)</span>
+        <span class="field-value">{{ viaje.origen }}</span>
+      </div>
+      <div>
+        <span class="field-label">Destino</span>
+        <span class="field-value">{{ viaje.destino }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2. Conductor Asignado</h2>
+    {% if conductor %}
+    <div class="grid">
+      <div>
+        <span class="field-label">Nombre del Conductor</span>
+        <span class="field-value">{{ conductor.nombre }}</span>
+      </div>
+      <div>
+        <span class="field-label">WhatsApp / Teléfono Conductor</span>
+        <span class="field-value">
+          <a href="https://wa.me/{{ conductor.telefono }}" target="_blank" style="color: #f59e0b;">{{ conductor.telefono }}</a>
+        </span>
+      </div>
+      <div>
+        <span class="field-label">Caponera / Unidad</span>
+        <span class="field-value">{{ conductor.unidad }}</span>
+      </div>
+    </div>
+    {% else %}
+    <p style="color: #94a3b8; font-style: italic; margin: 5px 0;">No se asignó conductor a este viaje.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>3. Bitácora de Auditoría ("Caja Negra")</h2>
+    <p style="font-size: 0.8rem; color: #94a3b8; margin: 0 0 10px 0;">Registro cronológico inmutable de transiciones de estado para auditoría y resolución de disputas.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha / Hora</th>
+          <th>Estado Anterior</th>
+          <th>Estado Nuevo</th>
+          <th>Actor Responsable</th>
+          <th>Detalles / Observaciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in bitacora %}
+        <tr>
+          <td>{{ b.created_at }}</td>
+          <td><code>{{ b.estado_anterior or '—' }}</code></td>
+          <td><strong style="color: #f59e0b;">{{ b.estado_nuevo }}</strong></td>
+          <td>{{ b.actor }}</td>
+          <td>{{ b.detalles }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>4. Resumen Textual para Expediente / Evidencia</h2>
+    <div id="rawDossierText" class="dossier-box">=== EXPEDIENTE OFICIAL CAPONERA APP ===
+ID Viaje: #{{ viaje.id }}
+Fecha Solicitud: {{ viaje.created_at }}
+Estado Actual: {{ viaje.estado }}
+Tarifa: C$ {{ viaje.tarifa }}
+Origen: {{ viaje.origen }}
+Destino: {{ viaje.destino }}
+Pasajero: {{ viaje.pasajero_nombre }} (Tel: {{ viaje.cliente_telefono or 'N/A' }})
+--- CONDUCTOR ASIGNADO ---
+Nombre: {{ conductor.nombre if conductor else 'N/A' }}
+Teléfono: {{ conductor.telefono if conductor else 'N/A' }}
+Caponera/Unidad: {{ conductor.unidad if conductor else 'N/A' }}
+--- BITÁCORA DE ESTADOS ---
+{% for b in bitacora %}[{{ b.created_at }}] {{ b.estado_anterior or 'INICIO' }} -> {{ b.estado_nuevo }} | Actor: {{ b.actor }} | {{ b.detalles }}
+{% endfor %}=======================================</div>
+  </div>
+</div>
 </body>
 </html>
 """
@@ -839,7 +1071,48 @@ def admin_panel():
         conductores = [dict(r) for r in cursor.fetchall()]
         cursor.execute("SELECT * FROM viajes ORDER BY id DESC LIMIT 10")
         viajes = [dict(r) for r in cursor.fetchall()]
-    return render_template_string(ADMIN_HTML, conductores=conductores, viajes=viajes)
+    return render_template_string(ADMIN_HTML, conductores=conductores, viajes=viajes, admin_key=provided_key)
+
+@app.route("/admin/caso/<int:viaje_id>", methods=["GET"])
+def admin_caso(viaje_id):
+    admin_key = os.getenv("CAPONERA_ADMIN_KEY", "").strip()
+    provided_key = (
+        request.args.get("key")
+        or request.headers.get("X-Admin-Key")
+        or request.headers.get("Authorization", "").replace("Bearer ", "")
+    ).strip()
+
+    if not admin_key or not provided_key or not hmac.compare_digest(provided_key, admin_key):
+        return jsonify({"success": False, "error": "Acceso denegado: Llave de administración requerida o inválida"}), 403
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM viajes WHERE id = ?", (viaje_id,))
+        viaje_row = cursor.fetchone()
+        if not viaje_row:
+            return jsonify({"success": False, "error": "Viaje no encontrado"}), 404
+
+        viaje = dict(viaje_row)
+
+        conductor = None
+        if viaje.get("conductor_id"):
+            cursor.execute("SELECT id, nombre, telefono, unidad FROM conductores WHERE id = ?", (viaje["conductor_id"],))
+            cond_row = cursor.fetchone()
+            if cond_row:
+                conductor = dict(cond_row)
+
+        cursor.execute("SELECT * FROM bitacora_estados WHERE viaje_id = ? ORDER BY id ASC", (viaje_id,))
+        bitacora = [dict(r) for r in cursor.fetchall()]
+
+    if request.is_json or request.args.get("format") == "json" or request.headers.get("Accept") == "application/json":
+        return jsonify({
+            "success": True,
+            "viaje": viaje,
+            "conductor": conductor,
+            "bitacora": bitacora
+        })
+
+    return render_template_string(CASE_DOSSIER_HTML, viaje=viaje, conductor=conductor, bitacora=bitacora, admin_key=provided_key)
 
 if __name__ == "__main__":
     host_bind = os.getenv("HOST", "0.0.0.0")

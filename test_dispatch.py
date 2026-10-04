@@ -297,8 +297,85 @@ def run_all_tests():
     assert res_health.get_json()["status"] == "healthy"
     print(f"  -> PASÓ: Telemetría activa en /api/version ({ver_data['version']}) y /health (healthy).")
 
+    # ---------------------------------------------------------
+    # CA-11: Bitácora de Estados Inmutable (Caja Negra - Punto 4)
+    # ---------------------------------------------------------
+    print("\n[TEST CA-11] Verificando bitácora inmutable de estados (caja negra)...")
+    # 1. Crear viaje (Transición 1: None -> buscando)
+    session_tok_c4 = secrets.token_hex(16)
+    r_c4_create = client.post("/api/viajes/crear", json={
+        "pasajero_nombre": "Audit Passenger",
+        "cliente_telefono": "88889999",
+        "origen": "Plaza San Jerónimo",
+        "destino": "Cailagua",
+        "tarifa": 35.0,
+        "session_token": session_tok_c4
+    }, environ_base={"REMOTE_ADDR": "192.168.1.199"})
+    assert r_c4_create.status_code == 200
+    c4_viaje_id = r_c4_create.get_json()["viaje_id"]
+
+    # 2. Conductor acepta viaje (Transición 2: buscando -> aceptado)
+    r_c4_accept = client.post(f"/api/viajes/{c4_viaje_id}/aceptar",
+                              headers={"X-Driver-Token": driver1_token},
+                              json={"conductor_id": 1})
+    assert r_c4_accept.status_code == 200
+
+    # 3. Conductor actualiza a en_camino (Transición 3: aceptado -> en_camino)
+    r_c4_transit = client.post(f"/api/viajes/{c4_viaje_id}/actualizar-estado",
+                               headers={"X-Driver-Token": driver1_token},
+                               json={"estado": "en_camino"})
+    assert r_c4_transit.status_code == 200
+
+    # 4. Actualizar a completado (Transición 4: en_camino -> completado)
+    r_c4_done = client.post(f"/api/viajes/{c4_viaje_id}/actualizar-estado",
+                            headers={"X-Driver-Token": driver1_token},
+                            json={"estado": "completado"})
+    assert r_c4_done.status_code == 200
+
+    # Consultar bitácora directamente en la BD
+    with server.get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM bitacora_estados WHERE viaje_id = ? ORDER BY id ASC", (c4_viaje_id,))
+        logs = cur.fetchall()
+        assert len(logs) >= 4, f"Se esperaban al menos 4 transiciones, obtenidas {len(logs)}"
+        assert logs[0]["estado_nuevo"] == "buscando" and logs[0]["actor"] == "pasajero"
+        assert logs[1]["estado_anterior"] == "buscando" and logs[1]["estado_nuevo"] == "aceptado"
+        assert logs[2]["estado_anterior"] == "aceptado" and logs[2]["estado_nuevo"] == "en_camino"
+        assert logs[3]["estado_anterior"] == "en_camino" and logs[3]["estado_nuevo"] == "completado"
+    print("  -> PASÓ: Bitácora registró fielmente 4 transiciones con actor y timestamp (Caja Negra 100%).")
+
+    # ---------------------------------------------------------
+    # CA-12: Expediente de caso en /admin/caso/<id> (Punto 4)
+    # ---------------------------------------------------------
+    print("\n[TEST CA-12] Verificando vista de caso en /admin/caso/<id>...")
+    # Sin llave -> 403
+    r_case_no_key = client.get(f"/admin/caso/{c4_viaje_id}")
+    assert r_case_no_key.status_code == 403, f"Esperado 403 sin llave, obtenido {r_case_no_key.status_code}"
+
+    # Llave inválida -> 403
+    r_case_bad_key = client.get(f"/admin/caso/{c4_viaje_id}?key=wrong_key")
+    assert r_case_bad_key.status_code == 403, f"Esperado 403 con llave mala, obtenido {r_case_bad_key.status_code}"
+
+    # Llave válida (HTML) -> 200
+    r_case_ok = client.get(f"/admin/caso/{c4_viaje_id}?key=sentinel_test_admin_key_2026")
+    assert r_case_ok.status_code == 200
+    html_text = r_case_ok.get_data(as_text=True)
+    assert "Expediente de Caso" in html_text
+    assert "88889999" in html_text, "El teléfono del pasajero debe estar visible en el expediente admin"
+    assert "Audit Passenger" in html_text
+    assert "José Ramón" in html_text
+
+    # Llave válida (JSON) -> 200
+    r_case_json = client.get(f"/admin/caso/{c4_viaje_id}?key=sentinel_test_admin_key_2026&format=json")
+    assert r_case_json.status_code == 200
+    case_data = r_case_json.get_json()
+    assert case_data["success"] is True
+    assert case_data["viaje"]["cliente_telefono"] == "88889999"
+    assert len(case_data["bitacora"]) >= 4
+    print("  -> PASÓ: Expediente de caso protegido (403/200), reúne solicitante, conductor y bitácora completa.")
+
     print("\n" + "=" * 65)
-    print("[OK] AUDITORIA COMPLETA! LOS 10 CRITERIOS CA-1 A CA-10 PASARON AL 100%")
+    print("[OK] AUDITORIA COMPLETA! TODOS LOS CRITERIOS CA-1 A CA-12 PASARON AL 100%")
     print("=" * 65)
 
 if __name__ == "__main__":
