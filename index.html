@@ -86,7 +86,7 @@
         </div>
       </div>
 
-      <!-- Buscador Abierto de CUALQUIER Pueblo, Municipio, Comarca o Barrio de Nicaragua + Botón Instalar -->
+      <!-- Buscador Abierto de CUALQUIER Pueblo, Municipio, Zona o Barrio de Nicaragua + Botón Instalar -->
       <div class="mt-2.5 flex items-center gap-1.5">
         <div class="relative flex-1">
           <i class="fa-solid fa-magnifying-glass-location absolute left-3 top-2.5 text-amber-400 text-xs"></i>
@@ -176,8 +176,8 @@
                 <i class="fa-solid fa-location-dot text-sm"></i>
               </div>
               <div class="flex-1">
-                <label class="block text-[10px] font-black uppercase text-rose-600">¿A qué barrio, comarca o lugar vas?</label>
-                <input id="inputDest" type="text" placeholder="Ej: Del parque 2c al sur, o nombre del barrio/comarca..." class="w-full bg-transparent text-sm text-slate-900 font-extrabold focus:outline-none placeholder-slate-400" />
+                <label class="block text-[10px] font-black uppercase text-rose-600">¿A qué dirección o lugar vas?</label>
+                <input id="inputDest" type="text" placeholder="Ej: Del parque 2c al sur, o punto de destino..." class="w-full bg-transparent text-sm text-slate-900 font-extrabold focus:outline-none placeholder-slate-400" />
               </div>
             </div>
           </div>
@@ -194,32 +194,22 @@
             </div>
           </div>
 
-          <!-- Nuevo Selector Visual de Pasaje (Tarjetas Estilo InDrive) -->
+          <!-- Elección Libre de Pasaje por el Usuario -->
           <div class="bg-slate-900 text-white p-3.5 rounded-2xl shadow-md border border-slate-800">
             <div class="flex justify-between items-center mb-2">
               <span class="text-xs font-extrabold text-amber-400 flex items-center gap-1.5">
-                <i class="fa-solid fa-hand-holding-dollar"></i> ¿Cuánto ofreces de pasaje?
+                <i class="fa-solid fa-hand-holding-dollar"></i> Elige o escribe tu oferta de pasaje:
               </span>
-              <span class="text-[10px] bg-white/10 text-slate-200 px-2 py-0.5 rounded-md font-bold">Efectivo al bajar</span>
+              <span class="text-[10px] bg-white/10 text-slate-200 px-2 py-0.5 rounded-md font-bold">Trato directo</span>
             </div>
 
-            <div class="grid grid-cols-4 gap-1.5">
-              <button onclick="seleccionarPrecio(30, this)" class="btn-precio py-2 rounded-xl border border-slate-700 bg-slate-800 text-white font-black text-xs hover:border-amber-400 transition-all flex flex-col items-center">
-                <span class="text-sm">C$30</span>
-                <span class="text-[9px] text-slate-400 font-semibold">Corta</span>
-              </button>
-              <button onclick="seleccionarPrecio(50, this)" class="btn-precio py-2 rounded-xl border-2 border-amber-400 bg-amber-400 text-slate-950 font-black text-xs shadow-md transition-all flex flex-col items-center">
-                <span class="text-sm">C$50</span>
-                <span class="text-[9px] text-slate-900 font-bold">Normal</span>
-              </button>
-              <button onclick="seleccionarPrecio(70, this)" class="btn-precio py-2 rounded-xl border border-slate-700 bg-slate-800 text-white font-black text-xs hover:border-amber-400 transition-all flex flex-col items-center">
-                <span class="text-sm">C$70</span>
-                <span class="text-[9px] text-slate-400 font-semibold">Larga</span>
-              </button>
-              <div class="relative flex items-center">
-                <span class="absolute left-2 text-amber-400 font-black text-xs">C$</span>
-                <input id="inputCustomPrice" type="number" value="50" onchange="actualizarPrecioManual(this.value)" class="w-full h-full bg-slate-950 border border-slate-700 rounded-xl pl-7 pr-1 text-sm font-black text-amber-400 focus:border-amber-400 focus:outline-none text-center" />
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="ajustarPrecioLibre(-10)" class="w-11 h-11 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-black text-base active:scale-95">-10</button>
+              <div class="relative flex-1">
+                <span class="absolute left-3.5 top-2.5 text-amber-400 font-black text-base">C$</span>
+                <input id="inputCustomPrice" type="number" value="40" onchange="actualizarPrecioManual(this.value)" class="w-full h-11 bg-slate-950 border-2 border-amber-400 rounded-xl pl-10 pr-3 text-lg font-black text-amber-400 focus:outline-none text-center" />
               </div>
+              <button type="button" onclick="ajustarPrecioLibre(10)" class="w-11 h-11 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-base active:scale-95">+10</button>
             </div>
           </div>
 
@@ -262,33 +252,7 @@
             </div>
           </div>
 
-          <!-- Guía de Tarifas Comunitarias de Referencia -->
-          <div class="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm mt-1">
-            <div class="flex items-center justify-between mb-2">
-              <h3 class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
-                <i class="fa-solid fa-map-location-dot text-amber-500"></i> Guía Comunitaria de Pasajes (Nicaragua)
-              </h3>
-              <span class="text-[10px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full font-extrabold">Acuerdo Justo</span>
-            </div>
-            <div class="grid grid-cols-2 gap-2 text-[11px]">
-              <div class="bg-slate-50 p-2 rounded-xl border border-slate-200 flex justify-between items-center">
-                <span class="text-slate-700 font-bold">Carrera dentro del barrio</span>
-                <span class="font-black text-emerald-700">C$25 - C$35</span>
-              </div>
-              <div class="bg-slate-50 p-2 rounded-xl border border-slate-200 flex justify-between items-center">
-                <span class="text-slate-700 font-bold">Centro / Mercado / Parque</span>
-                <span class="font-black text-emerald-700">C$40 - C$50</span>
-              </div>
-              <div class="bg-slate-50 p-2 rounded-xl border border-slate-200 flex justify-between items-center">
-                <span class="text-slate-700 font-bold">Entre barrios / Comarcas</span>
-                <span class="font-black text-amber-700">C$60 - C$90</span>
-              </div>
-              <div class="bg-slate-50 p-2 rounded-xl border border-slate-200 flex justify-between items-center">
-                <span class="text-slate-700 font-bold">Con carga / Nocturno</span>
-                <span class="font-black text-rose-700">C$80 - C$120</span>
-              </div>
-            </div>
-          </div>
+
 
           <!-- Vitrina Comercial Comunitaria -->
           <div class="mt-1 space-y-2.5">
@@ -521,7 +485,14 @@
     };
 
     let currentRole = 'pasajero';
-    let selectedPrice = 50;
+    let selectedPrice = 40;
+    function ajustarPrecioLibre(delta) {
+      const inp = document.getElementById('inputCustomPrice');
+      let val = parseInt(inp.value) || 40;
+      val = Math.max(20, val + delta);
+      inp.value = val;
+      selectedPrice = val;
+    }
     let activeRideId = localStorage.getItem('caponera_active_ride_id') || null;
     let activeSessionToken = localStorage.getItem('caponera_session_token') || null;
     let driverToken = localStorage.getItem('caponera_driver_token') || '';
@@ -546,7 +517,7 @@
       if (badge) badge.innerText = `📍 ${currentCity} • En Vivo`;
     }
 
-    // Geocodificación inversa gratuita (OpenStreetMap Nominatim) para detectar CUALQUIER pueblo, comarca o barrio real
+    // Geocodificación inversa gratuita (OpenStreetMap Nominatim) para detectar CUALQUIER pueblo, zona o barrio real
     async function detectarNombrePuebloPorGPS(lat, lng) {
       try {
         const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=14&accept-language=es`;
@@ -574,7 +545,7 @@
       cargarAnunciosCiudad(mejor);
     }
 
-    // Buscar cualquier pueblo, municipio, comarca o barrio escrito por el usuario
+    // Buscar cualquier pueblo, municipio, zona o barrio escrito por el usuario
     async function irAPuebloOBuscar(texto) {
       const q = (texto || '').trim();
       if (!q) return;
@@ -587,7 +558,7 @@
         mostrarToast(`📍 Mapa ubicado en ${q}`);
         return;
       }
-      // Búsqueda abierta en todo el mapa de Nicaragua (sin excluir ningún pueblo ni comarca)
+      // Búsqueda abierta en todo el mapa de Nicaragua (sin excluir ningún pueblo ni zona)
       try {
         const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=ni&q=${encodeURIComponent(q)}&limit=1&accept-language=es`;
         const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
