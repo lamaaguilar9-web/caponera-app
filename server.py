@@ -64,6 +64,7 @@ class InMemoryRateLimiter:
 
 viaje_rate_limiter = InMemoryRateLimiter(max_requests=5, window_sec=60)
 recarga_rate_limiter = InMemoryRateLimiter(max_requests=5, window_sec=60)
+registro_rate_limiter = InMemoryRateLimiter(max_requests=10, window_sec=60)
 
 def registrar_evento_bitacora(viaje_id: int, anterior: str, nuevo: str, actor: str = "sistema", detalles: str = ""):
     """Registra de forma inmutable cada cambio de estado en la tabla bitacora_estados (caja negra de auditoría)."""
@@ -150,6 +151,11 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
+        for _col, _def in [("cedula", "TEXT"), ("placa", "TEXT"), ("suspendido", "INTEGER DEFAULT 0"), ("reglas_aceptadas", "INTEGER DEFAULT 0")]:
+            try:
+                cursor.execute(f"ALTER TABLE conductores ADD COLUMN {_col} {_def};")
+            except sqlite3.OperationalError:
+                pass
         # Marcar conductores demo existentes
         cursor.execute("UPDATE conductores SET is_demo = 1 WHERE telefono IN ('50589130414', '50588881111', '50588882222')")
 
@@ -302,12 +308,18 @@ def get_authenticated_driver(expected_conductor_id=None):
             driver = cursor.fetchone()
             if not driver or not driver["driver_token"] or not hmac.compare_digest(token, driver["driver_token"]):
                 return None, (jsonify({"success": False, "error": "Acceso denegado: X-Driver-Token no coincide con el conductor"}), 403)
-            return dict(driver), None
+            driver_dict = dict(driver)
+            if driver_dict.get("suspendido") == 1:
+                return None, (jsonify({"success": False, "error": "Acceso denegado: Cuenta de conductor suspendida por el operador"}), 403)
+            return driver_dict, None
         else:
             cursor.execute("SELECT * FROM conductores WHERE driver_token IS NOT NULL AND driver_token != ''")
             for d in cursor.fetchall():
                 if hmac.compare_digest(token, d["driver_token"]):
-                    return dict(d), None
+                    driver_dict = dict(d)
+                    if driver_dict.get("suspendido") == 1:
+                        return None, (jsonify({"success": False, "error": "Acceso denegado: Cuenta de conductor suspendida por el operador"}), 403)
+                    return driver_dict, None
             return None, (jsonify({"success": False, "error": "Acceso denegado: X-Driver-Token inválido"}), 403)
 
 # =========================================================
@@ -377,9 +389,80 @@ def static_files(filename):
 # =========================================================
 # RUTAS API: CONFIGURACIÓN Y CIUDAD OPERATIVA (CA-9)
 # =========================================================
+
+CIUDADES_NIC_COORDS = {
+    "Managua": [12.1149, -86.2362],
+    "Masaya": [12.1364, -86.2514],
+    "Granada": [11.9299, -85.9560],
+    "Leon": [12.4379, -86.8780],
+    "Chinandega": [12.6294, -87.1311],
+    "Esteli": [13.0926, -86.3528],
+    "Matagalpa": [12.9290, -85.9168],
+    "Jinotega": [13.0917, -86.0035],
+    "Rivas": [11.4372, -85.8250],
+    "Jinotepe": [11.8496, -86.1990],
+    "Boaco": [12.4722, -85.6576],
+    "Bluefields": [12.0137, -83.7635],
+}
+
+@app.route("/api/anuncios", methods=["GET"])
+def get_anuncios():
+    ciudad = (request.args.get("ciudad") or os.getenv("CAPONERA_CIUDAD", "Masaya")).strip()
+    if ciudad not in CIUDADES_NIC_COORDS:
+        ciudad = "Masaya"
+    anuncios = [
+        {
+            "id": "vip-polarizados",
+            "titulo": "Polarizados & Focos Pro",
+            "subtitulo": f"Servicio Especializado Automotriz • Cobertura {ciudad}",
+            "badge": "GARANTÍA TOTAL",
+            "vip": True,
+            "descripcion": "🚗 Polarizado de Autos: Máxima protección solar UV, privacidad y reducción de calor. 💡 Restauración de Focos con Polímero a Vapor: focos 100% cristalinos como nuevos.",
+            "cta_texto": "Cotizar por WhatsApp",
+            "cta_url": "https://wa.me/50589130414?text=Hola%20Luis,%20vi%20tu%20anuncio%20en%20la%20App.%20Quiero%20cotizar%20polarizado%20y%20restauraci%C3%B3n%20de%20focos."
+        },
+        {
+            "id": "pauta-negocio",
+            "titulo": f"¿Tienes un negocio o comercio en {ciudad}?",
+            "subtitulo": "Anúnciate en la red nacional desde C$ 150/mes",
+            "badge": "ESPACIO DISPONIBLE",
+            "vip": False,
+            "descripcion": f"Llega a pasajeros y conductores activos todos los días en {ciudad}. Promociona tu comedor, farmacia o taller directamente en la app.",
+            "cta_texto": "Pautar mi Negocio",
+            "cta_url": "https://wa.me/50589130414?text=Hola%20Luis,%20quiero%20anunciar%20mi%20negocio%20en%20la%20App%20por%20C$%20150"
+        }
+    ]
+    return jsonify({"success": True, "ciudad": ciudad, "anuncios": anuncios})
+
+@app.route("/api/conductor/stats", methods=["GET"])
+def get_conductor_stats():
+    conductor_id = request.args.get("conductor_id", type=int)
+    hoy = datetime.date.today().strftime("%Y-%m-%d")
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if conductor_id:
+            cursor.execute(
+                "SELECT COUNT(*) as total_viajes, COALESCE(SUM(tarifa), 0) as ganado FROM viajes WHERE conductor_id = ? AND estado IN ('aceptado', 'en_camino', 'completado', 'entregado') AND substr(created_at, 1, 10) = ?",
+                (conductor_id, hoy)
+            )
+        else:
+            cursor.execute(
+                "SELECT COUNT(*) as total_viajes, COALESCE(SUM(tarifa), 0) as ganado FROM viajes WHERE estado IN ('aceptado', 'en_camino', 'completado', 'entregado') AND substr(created_at, 1, 10) = ?",
+                (hoy,)
+            )
+        row = cursor.fetchone()
+    return jsonify({
+        "success": True,
+        "ganado_hoy": float(row["ganado"] if row else 0),
+        "viajes_hoy": int(row["total_viajes"] if row else 0)
+    })
+
 @app.route("/api/config", methods=["GET"])
 def get_config():
-    ciudad = os.getenv("CAPONERA_CIUDAD", "Masaya")
+    ciudad = (request.args.get("ciudad") or os.getenv("CAPONERA_CIUDAD", "Masaya")).strip()
+    if ciudad not in CIUDADES_NIC_COORDS:
+        ciudad = "Masaya"
+    coords = CIUDADES_NIC_COORDS.get(ciudad, [12.1364, -86.2514])
     try:
         tarifa_min = float(os.getenv("CAPONERA_TARIFA_MIN", "15.0"))
     except ValueError:
@@ -405,7 +488,9 @@ def get_config():
         "ciudad": ciudad,
         "tarifa_min": tarifa_min,
         "tarifa_max": tarifa_max,
-        "zonas": zonas
+        "zonas": zonas,
+        "coords": coords,
+        "ciudades": CIUDADES_NIC_COORDS
     })
 
 # =========================================================
@@ -467,6 +552,65 @@ def get_conductores():
     if request.path == "/api/conductores/activos":
         return jsonify(conductores)
     return jsonify({"success": True, "conductores": conductores})
+
+
+@app.route("/api/conductor/registro", methods=["POST"])
+def registrar_conductor():
+    client_ip = get_client_ip()
+    if not registro_rate_limiter.is_allowed(client_ip):
+        return jsonify({"success": False, "error": "Demasiadas solicitudes de registro. Espere un momento (HTTP 429)"}), 429
+
+    data = request.get_json(silent=True) or {}
+    nombre = str(data.get("nombre", "")).strip()[:100]
+    cedula = str(data.get("cedula", "")).strip()[:30]
+    telefono = str(data.get("telefono", "")).strip()[:30]
+    placa = str(data.get("placa") or data.get("unidad", "")).strip()[:50]
+    reglas = data.get("reglas_aceptadas") in (True, 1, "1", "true", "True")
+
+    if not reglas:
+        return jsonify({"success": False, "error": "Debe aceptar las Reglas de la Red para registrarse"}), 400
+    if len(nombre) < 3:
+        return jsonify({"success": False, "error": "El nombre completo es requerido (mínimo 3 caracteres)"}), 400
+
+    cedula_clean = re.sub(r'[\s\-]', '', cedula)
+    if not (re.match(r'^[0-9]{3}-?[0-9]{6}-?[0-9]{4}[A-Za-z]$', cedula) or (len(cedula_clean) >= 10 and cedula_clean.isalnum())):
+        return jsonify({"success": False, "error": "Número de cédula inválido. Formato esperado: 001-000000-0000A"}), 400
+
+    tel_clean = re.sub(r'[\s\-\+]', '', telefono)
+    if not (re.match(r'^(\+?505)?[2578]\d{7}$', telefono) or (len(tel_clean) >= 8 and tel_clean.isdigit())):
+        return jsonify({"success": False, "error": "Número de teléfono/WhatsApp inválido. Ingrese 8 dígitos válidos"}), 400
+
+    if len(placa) < 2:
+        return jsonify({"success": False, "error": "Número de placa o unidad requerido"}), 400
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM conductores WHERE telefono = ? OR (cedula IS NOT NULL AND cedula != '' AND cedula = ?)", (telefono, cedula))
+        if cursor.fetchone():
+            return jsonify({"success": False, "error": "Ya existe un conductor registrado con este teléfono o cédula"}), 409
+
+        driver_token = f"CP-DRV-{secrets.token_hex(12)}"
+        is_launch_free = os.environ.get("PLAN_GRATIS_LAUNCH", "").strip() == "1"
+        plan_nombre = "Lanzamiento (Gratis)" if is_launch_free else "Pionero (15 Días Gratis)"
+        exp_days = 365 if is_launch_free else 15
+        exp_date = (datetime.datetime.now() + datetime.timedelta(days=exp_days)).strftime("%Y-%m-%d")
+        unidad_desc = f"Caponera · {placa}"
+
+        cursor.execute("""
+            INSERT INTO conductores (nombre, cedula, telefono, unidad, placa, driver_token, suspendido, reglas_aceptadas, lat, lng, is_online, plan_activo, plan_nombre, plan_expira, is_demo)
+            VALUES (?, ?, ?, ?, ?, ?, 0, 1, 12.1364, -86.2514, 1, 1, ?, ?, 0)
+        """, (nombre, cedula, telefono, unidad_desc, placa, driver_token, plan_nombre, exp_date))
+        conductor_id = cursor.lastrowid
+        conn.commit()
+
+    return jsonify({
+        "success": True,
+        "conductor_id": conductor_id,
+        "nombre": nombre,
+        "unidad": unidad_desc,
+        "driver_token": driver_token,
+        "mensaje": "¡Registro completado! Guarda este PIN/Token de acceso; se muestra UNA SOLA VEZ."
+    }), 201
 
 @app.route("/api/conductor/ubicacion", methods=["POST"])
 @app.route("/api/conductor/<int:conductor_id>/posicion", methods=["POST"])
@@ -706,7 +850,7 @@ def get_viajes_pendientes():
             
     if request.path == "/api/conductor/viajes-pendientes":
         return jsonify(carreras)
-    return jsonify({"success": True, "viajes": carreras})
+    return jsonify({"success": True, "viajes": carreras, "carreras": carreras})
 
 @app.route("/api/viajes/<int:viaje_id>/aceptar", methods=["POST"])
 def aceptar_viaje(viaje_id):
