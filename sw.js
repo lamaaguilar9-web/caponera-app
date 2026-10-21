@@ -1,5 +1,5 @@
 // Service Worker Caponera App (caponera-pwa)
-const CACHE_NAME = 'sentinel-pwa-v3.0-nicaragua-pueblos';
+const CACHE_NAME = 'sentinel-pwa-v3.1-daylight-selector';
 const STATIC_ASSETS = [
   './manifest.json',
   './icon-192.png',

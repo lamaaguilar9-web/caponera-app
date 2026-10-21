@@ -351,6 +351,16 @@ def service_worker():
 def get_app_version():
     if os.getenv("APP_VERSION"):
         return os.getenv("APP_VERSION")
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    vpath = os.path.join(base_dir, "version.txt")
+    if os.path.exists(vpath):
+        try:
+            with open(vpath, "r", encoding="utf-8") as f:
+                content_v = f.read().strip()
+                if content_v:
+                    return content_v
+        except Exception:
+            pass
     if os.path.exists("version.txt"):
         try:
             with open("version.txt", "r", encoding="utf-8") as f:

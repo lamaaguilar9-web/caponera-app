@@ -34,42 +34,114 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
     }
     .leaflet-container { background: #e2e8f0 !important; font-family: inherit; }
+    /* ============================================================== */
+    /* MODO DÍA DE ALTO CONTRASTE (O1 - Legible bajo sol directo)      */
+    /* ============================================================== */
+    body.daylight-mode {
+      background-color: #f1f5f9 !important;
+      color: #0f172a !important;
+    }
+    body.daylight-mode .app-container {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+    }
+    body.daylight-mode .bg-slate-950 {
+      background-color: #f8fafc !important;
+    }
+    body.daylight-mode .bg-slate-900 {
+      background-color: #ffffff !important;
+    }
+    body.daylight-mode .border-slate-800,
+    body.daylight-mode .border-slate-700 {
+      border-color: #e2e8f0 !important;
+    }
+    body.daylight-mode .text-slate-100,
+    body.daylight-mode .text-slate-200 {
+      color: #0f172a !important;
+    }
+    body.daylight-mode .text-slate-300,
+    body.daylight-mode .text-slate-400 {
+      color: #334155 !important;
+    }
+    body.daylight-mode .text-slate-500 {
+      color: #64748b !important;
+    }
+    body.daylight-mode .text-white {
+      color: #0f172a !important;
+    }
+    body.daylight-mode header .text-white {
+      color: #ffffff !important;
+    }
+    body.daylight-mode input,
+    body.daylight-mode select,
+    body.daylight-mode textarea {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+      border-color: #cbd5e1 !important;
+    }
+    body.daylight-mode .header-main #citySelect {
+      background-color: rgba(255, 255, 255, 0.75) !important;
+      color: #0f172a !important;
+      border-color: rgba(15, 23, 42, 0.25) !important;
+    }
+    body.daylight-mode .leaflet-container {
+      background: #e2e8f0 !important;
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 flex justify-center min-h-screen select-none">
 
   <!-- Contenedor móvil centralizado tipo PWA -->
-  <div class="w-full max-w-md bg-slate-950 flex flex-col min-h-screen border-x border-slate-800 shadow-2xl relative">
+  <div class="app-container w-full max-w-md bg-slate-950 flex flex-col min-h-screen border-x border-slate-800 shadow-2xl relative">
 
     <!-- Header Principal Compacto (1 sola fila limpia para celular) -->
-    <header class="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 px-3.5 py-2.5 text-slate-950 flex justify-between items-center sticky top-0 z-40 shadow-lg">
+    <header class="header-main bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 px-3 py-2 text-slate-950 flex justify-between items-center sticky top-0 z-40 shadow-lg">
       <div class="flex items-center gap-2">
-        <div class="w-9 h-9 bg-slate-950 text-amber-400 rounded-2xl flex items-center justify-center font-black text-lg shadow-inner border border-amber-400/30">
+        <div class="w-8 h-8 bg-slate-950 text-amber-400 rounded-xl flex items-center justify-center font-black text-base shadow-inner border border-amber-400/30 shrink-0">
           <i class="fa-solid fa-motorcycle"></i>
         </div>
         <div>
           <div class="flex items-center gap-1.5">
-            <h1 class="font-black text-base leading-tight tracking-tight">Caponera<span class="text-white drop-shadow">App</span></h1>
-            <span class="text-[9px] bg-slate-950 text-amber-300 font-extrabold px-1.5 py-0.2 rounded-md">PRO</span>
+            <h1 class="font-black text-sm leading-tight tracking-tight">Caponera<span class="text-white drop-shadow">App</span></h1>
+            <span class="text-[8px] bg-slate-950 text-amber-300 font-extrabold px-1 rounded">PRO</span>
           </div>
-          <p class="text-[10px] font-bold text-slate-900 flex items-center gap-1">
-            <span class="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span> Red <span class="city-name-label">Nicaragua</span> &bull; En Vivo
-          </p>
+          <!-- Selector de Ciudades #citySelect (O2) -->
+          <div class="flex items-center gap-1 mt-0.5">
+            <i class="fa-solid fa-location-dot text-[9px] text-slate-900"></i>
+            <select id="citySelect" onchange="cambiarCiudadManual(this.value)" class="bg-slate-950/20 hover:bg-slate-950/30 text-slate-950 font-black text-[10px] rounded-md px-1 py-0.2 border border-slate-950/20 focus:outline-none cursor-pointer">
+              <option value="Managua">Managua</option>
+              <option value="Masaya" selected>Masaya</option>
+              <option value="Granada">Granada</option>
+              <option value="Leon">León</option>
+              <option value="Chinandega">Chinandega</option>
+              <option value="Esteli">Estelí</option>
+              <option value="Matagalpa">Matagalpa</option>
+              <option value="Jinotega">Jinotega</option>
+              <option value="Rivas">Rivas</option>
+              <option value="Jinotepe">Jinotepe</option>
+              <option value="Boaco">Boaco</option>
+              <option value="Bluefields">Bluefields</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      <!-- Acciones de Cabecera: Botón Instalar + Selector de Rol -->
+      <!-- Acciones de Cabecera: Modo Día (O1) + Instalar + Rol -->
       <div class="flex items-center gap-1.5">
-        <button id="btnInstallApp" onclick="instalarApp()" class="bg-slate-950 hover:bg-slate-900 text-amber-300 text-[10px] font-black px-2.5 py-1.5 rounded-xl shadow border border-amber-400/30 flex items-center gap-1 active:scale-95 transition">
+        <button id="btnThemeToggle" onclick="toggleTheme()" class="w-7 h-7 rounded-xl bg-slate-950/80 text-amber-300 hover:text-white flex items-center justify-center text-xs shadow border border-amber-400/30 active:scale-95 transition" title="Alternar Modo Día / Noche">
+          <i id="themeIcon" class="fa-solid fa-sun"></i>
+        </button>
+
+        <button id="btnInstallApp" onclick="instalarApp()" class="h-7 px-2 rounded-xl bg-slate-950 hover:bg-slate-900 text-amber-300 text-[10px] font-black shadow border border-amber-400/30 flex items-center gap-1 active:scale-95 transition">
           <i class="fa-solid fa-download text-[9px]"></i> <span>Instalar</span>
         </button>
 
-        <div class="bg-slate-950/25 p-1 rounded-2xl flex text-xs font-black border border-slate-950/15">
-          <button id="btnRolePassenger" onclick="cambiarRol('pasajero')" class="px-2.5 py-1 rounded-xl bg-slate-950 text-amber-400 shadow-md transition-all">
+        <div class="bg-slate-950/25 p-0.5 rounded-xl flex text-[11px] font-black border border-slate-950/15">
+          <button id="btnRolePassenger" onclick="cambiarRol('pasajero')" class="px-2 py-0.5 rounded-lg bg-slate-950 text-amber-400 shadow transition-all">
             Pasajero
           </button>
-          <button id="btnRoleDriver" onclick="cambiarRol('conductor')" class="px-2.5 py-1 rounded-xl text-slate-950 hover:text-white transition-all flex items-center gap-1" title="Área exclusiva para conductores">
-            <i class="fa-solid fa-lock text-[9px] text-slate-950"></i><span>Caponero</span>
+          <button id="btnRoleDriver" onclick="cambiarRol('conductor')" class="px-2 py-0.5 rounded-lg text-slate-950 hover:text-white transition-all flex items-center gap-1" title="Área exclusiva para conductores">
+            <i class="fa-solid fa-lock text-[8px] text-slate-950"></i><span>Caponero</span>
           </button>
         </div>
       </div>
@@ -385,6 +457,7 @@
     let driverToken = localStorage.getItem('caponera_driver_token') || '';
     let driverOnline = true;
     let mapInstance = null;
+    let userMarker = null;
     let userCoords = [11.9744, -86.0942]; // Masaya fallback
     let currentCity = localStorage.getItem('caponera_ciudad') || 'Nicaragua';
     let deferredInstallPrompt = null;
@@ -425,6 +498,90 @@
       }
     }
 
+        // ==============================================================
+    // RED NACIONAL (12 CIUDADES) & MODO DÍA PERSISTENTE (O1 + O2)
+    // ==============================================================
+    const CIUDADES_NIC = {
+      'Managua': [12.1364, -86.2514],
+      'Masaya': [11.9744, -86.0942],
+      'Granada': [11.9299, -85.9560],
+      'Leon': [12.4379, -86.8780],
+      'Chinandega': [12.6294, -87.1311],
+      'Esteli': [13.0919, -86.3538],
+      'Matagalpa': [12.9256, -85.9175],
+      'Jinotega': [13.0970, -86.0021],
+      'Rivas': [11.4372, -85.8263],
+      'Jinotepe': [11.8496, -86.1990],
+      'Boaco': [12.4722, -85.6586],
+      'Bluefields': [12.0136, -83.7635]
+    };
+
+    function initTheme() {
+      const savedTheme = localStorage.getItem('sentinel_theme') || 'daylight';
+      applyTheme(savedTheme);
+    }
+
+    function toggleTheme() {
+      const isDay = document.body.classList.contains('daylight-mode');
+      const next = isDay ? 'dark' : 'daylight';
+      applyTheme(next);
+      localStorage.setItem('sentinel_theme', next);
+    }
+
+    function applyTheme(theme) {
+      const icon = document.getElementById('themeIcon');
+      if (theme === 'daylight') {
+        document.body.classList.add('daylight-mode');
+        if (icon) {
+          icon.className = 'fa-solid fa-moon text-amber-300';
+          icon.parentElement.title = 'Cambiar a Modo Noche';
+        }
+      } else {
+        document.body.classList.remove('daylight-mode');
+        if (icon) {
+          icon.className = 'fa-solid fa-sun text-amber-300';
+          icon.parentElement.title = 'Cambiar a Modo Día';
+        }
+      }
+    }
+
+    function ciudadMasCercana(lat, lng) {
+      let minD = Infinity;
+      let ciudadElegida = 'Masaya';
+      for (const [cd, coords] of Object.entries(CIUDADES_NIC)) {
+        const d = Math.hypot(lat - coords[0], lng - coords[1]);
+        if (d < minD) {
+          minD = d;
+          ciudadElegida = cd;
+        }
+      }
+      return ciudadElegida;
+    }
+
+    function cambiarCiudadManual(ciudad) {
+      if (!CIUDADES_NIC[ciudad]) return;
+      currentCity = ciudad;
+      localStorage.setItem('caponera_ciudad', ciudad);
+      localStorage.setItem('user_city_manual', 'true');
+      actualizarCiudadSeleccionada(ciudad, true);
+    }
+
+    function actualizarCiudadSeleccionada(ciudad, moverMapa) {
+      const select = document.getElementById('citySelect');
+      if (select && select.value !== ciudad) {
+        select.value = ciudad;
+      }
+      currentCity = ciudad;
+      document.querySelectorAll('.city-name-label').forEach(el => el.innerText = ciudad);
+
+      const coords = CIUDADES_NIC[ciudad] || CIUDADES_NIC['Masaya'];
+      userCoords = coords.slice();
+      if (moverMapa && mapInstance) {
+        mapInstance.setView(coords, 14);
+        if (userMarker) userMarker.setLatLng(coords);
+      }
+    }
+
     function initMap() {
       mapInstance = L.map('map', { zoomControl: false, attributionControl: false }).setView(userCoords, 15);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(mapInstance);
@@ -435,41 +592,49 @@
         iconSize: [20, 20],
         iconAnchor: [10, 10]
       });
-      L.marker(userCoords, { icon: userIcon }).addTo(mapInstance);
+      userMarker = L.marker(userCoords, { icon: userIcon }).addTo(mapInstance);
+    }
 
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            userCoords = [pos.coords.latitude, pos.coords.longitude];
-            if (mapInstance) mapInstance.setView(userCoords, 16);
-            detectarCiudadGPS(userCoords[0], userCoords[1]);
-          },
-          () => {},
-          { enableHighAccuracy: true, timeout: 6000 }
-        );
-      }
+    function detectarUbicacionGPS() {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        userCoords = [lat, lng];
+        if (userMarker) userMarker.setLatLng([lat, lng]);
+        
+        // La elección manual del usuario manda sobre la autodetección (O2)
+        const eleccionManual = localStorage.getItem('user_city_manual') === 'true';
+        if (!eleccionManual) {
+          const ciudadDetectada = ciudadMasCercana(lat, lng);
+          actualizarCiudadSeleccionada(ciudadDetectada, false);
+        }
+      }, () => {}, { enableHighAccuracy: true, timeout: 6000 });
     }
 
     function centrarUbicacion() {
-      if (navigator.geolocation) {
-        mostrarToast('🛰️ Ubicando tu posición por GPS...');
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            userCoords = [pos.coords.latitude, pos.coords.longitude];
-            if (mapInstance) mapInstance.setView(userCoords, 16);
-            detectarCiudadGPS(userCoords[0], userCoords[1]);
-            mostrarToast('✅ Ubicación actualizada');
-          },
-          () => mostrarToast('Activa el GPS en tu celular'),
-          { enableHighAccuracy: true, timeout: 6000 }
-        );
+      mostrarToast('🛰️ Localizando posición...');
+      if (!navigator.geolocation) {
+        const coords = CIUDADES_NIC[currentCity] || CIUDADES_NIC['Masaya'];
+        if (mapInstance) mapInstance.setView(coords, 15);
+        return;
       }
-    }
-
-    async function detectarCiudadGPS(lat, lng) {
-      try {
-        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=14&accept-language=es`;
-        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        userCoords = [lat, lng];
+        if (mapInstance) mapInstance.setView([lat, lng], 16);
+        if (userMarker) userMarker.setLatLng([lat, lng]);
+        if (localStorage.getItem('user_city_manual') !== 'true') {
+          const ciudadDetectada = ciudadMasCercana(lat, lng);
+          actualizarCiudadSeleccionada(ciudadDetectada, false);
+        }
+        mostrarToast('✅ Ubicación actualizada');
+      }, () => {
+        const coords = CIUDADES_NIC[currentCity] || CIUDADES_NIC['Masaya'];
+        if (mapInstance) mapInstance.setView(coords, 14);
+      }, { enableHighAccuracy: true, timeout: 6000 });
+    });
         if (res.ok) {
           const data = await res.json();
           const addr = data.address || {};
@@ -778,9 +943,19 @@
     }, 4000);
 
     window.addEventListener('DOMContentLoaded', () => {
+      initTheme();
       initMap();
+      const savedCity = localStorage.getItem('caponera_ciudad') || 'Masaya';
+      if (CIUDADES_NIC[savedCity]) {
+        actualizarCiudadSeleccionada(savedCity, false);
+      }
+      detectarUbicacionGPS();
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').then(r => r.update()).catch(() => {});
+      }
+    });
+      }
+    });
       }
     });
   </script>
