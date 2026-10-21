@@ -3,13 +3,28 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#f59e0b" />
+  <meta name="theme-color" content="#0f172a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" href="icon-192.png" />
-  <title>Caponera App 🛺 | Transporte Comunitario en Nicaragua</title>
+  <title>Caponera App 🛺 | Red Nacional en Todos los Pueblos y Municipios de Nicaragua</title>
+
+  <script>
+    // Limpieza automática de cualquier caché viejo del navegador para mostrar siempre la interfaz nueva v3.0
+    (function() {
+      try {
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            names.forEach(function(name) {
+              if (name !== 'sentinel-pwa-v3.0-nicaragua-pueblos') caches.delete(name);
+            });
+          });
+        }
+      } catch(e) {}
+    })();
+  </script>
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
@@ -18,475 +33,616 @@
 
   <style>
     @keyframes pulse-ring {
-      0% { transform: scale(0.95); opacity: 0.8; }
-      50% { transform: scale(1.15); opacity: 0.3; }
-      100% { transform: scale(0.95); opacity: 0.8; }
+      0% { transform: scale(0.95); opacity: 0.85; }
+      50% { transform: scale(1.18); opacity: 0.35; }
+      100% { transform: scale(0.95); opacity: 0.85; }
     }
     @keyframes fade-in {
       from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: none; }
     }
     .pulse-radar { animation: pulse-ring 2s infinite ease-in-out; }
-    .animate-fade-in { animation: fade-in .35s ease-out both; }
+    .animate-fade-in { animation: fade-in .3s ease-out both; }
     ::-webkit-scrollbar { display: none; }
     body {
       -webkit-tap-highlight-color: transparent;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
-    /* Mapa en MODO DÍA (legible bajo el sol directo) */
     .leaflet-container { background: #e2e8f0 !important; font-family: inherit; }
     .custom-caponera-icon, .user-pin-icon { background: transparent; border: none; }
   </style>
 </head>
-<body class="bg-slate-200 text-slate-900 flex justify-center min-h-screen select-none">
+<body class="bg-slate-900 text-slate-900 flex justify-center min-h-screen select-none">
 
-  <div class="w-full max-w-md bg-slate-100 flex flex-col min-h-screen border-x border-slate-300 shadow-2xl relative">
+  <div class="w-full max-w-md bg-slate-50 flex flex-col min-h-screen shadow-2xl relative overflow-x-hidden">
 
-    <!-- Header Principal Nacionalizado (A1, A4, A5) -->
-    <header class="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 p-3 text-slate-950 flex flex-col gap-2 sticky top-0 z-40 shadow-lg">
-      <div class="flex justify-between items-center">
-        <div class="flex items-center gap-2">
-          <div class="w-10 h-10 bg-slate-950 text-amber-400 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner border border-amber-400/30">
+    <!-- NUEVO HEADER SUPER-APP v3.0: COBERTURA ABIERTA EN CADA PUEBLO Y MUNICIPIO DE NICARAGUA -->
+    <header class="bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 text-white p-3.5 sticky top-0 z-40 shadow-xl border-b-2 border-amber-400">
+      <div class="flex justify-between items-center gap-2">
+        <div class="flex items-center gap-2.5">
+          <div class="w-11 h-11 bg-gradient-to-br from-amber-400 to-orange-500 text-slate-950 rounded-2xl flex items-center justify-center font-black text-xl shadow-lg border-2 border-white/20">
             <i class="fa-solid fa-motorcycle"></i>
           </div>
           <div>
             <div class="flex items-center gap-1.5">
-              <h1 class="font-black text-lg leading-tight tracking-tight">Caponera<span class="text-white drop-shadow">App</span></h1>
-              <span class="text-[9px] bg-slate-950 text-amber-300 font-extrabold px-1.5 py-0.5 rounded-md">NIC</span>
+              <h1 class="font-black text-lg leading-none tracking-tight text-white">Caponera<span class="text-amber-400">App</span></h1>
+              <span class="text-[9px] bg-amber-400 text-slate-950 font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider">v3.0 NIC</span>
             </div>
-            <p class="text-[10px] font-bold text-slate-900 flex items-center gap-1">
-              <span class="w-2 h-2 rounded-full bg-emerald-700 animate-pulse"></span> Red Nacional 🇳🇮 &bull; <span class="city-name-label">Masaya</span> &bull; En Vivo
+            <p class="text-[11px] font-bold text-emerald-300 flex items-center gap-1 mt-1">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+              <span>🇳🇮 Activa en: <strong class="city-name-label text-white underline decoration-amber-400">Todo Nicaragua (GPS)</strong></span>
             </p>
           </div>
         </div>
 
-        <!-- Selector de Rol: Pasajero / Conductor -->
-        <div class="bg-slate-950/20 p-1 rounded-2xl flex text-xs font-black border border-slate-950/15">
-          <button id="btnRolePassenger" onclick="cambiarRol('pasajero')" class="px-3 py-1.5 rounded-xl bg-slate-950 text-amber-400 shadow-md transition-all">
-            <i class="fa-solid fa-user text-[11px] mr-1"></i>Cliente
+        <!-- Selector de Rol con Candado Visible para Caponero -->
+        <div class="bg-slate-800/90 p-1 rounded-2xl flex text-xs font-black border border-slate-700 shadow-inner">
+          <button id="btnRolePassenger" onclick="cambiarRol('pasajero')" class="px-3 py-2 rounded-xl bg-amber-400 text-slate-950 shadow-md transition-all flex items-center gap-1">
+            <i class="fa-solid fa-street-view"></i><span>Pasajero</span>
           </button>
-          <button id="btnRoleDriver" onclick="cambiarRol('conductor')" class="px-3 py-1.5 rounded-xl text-slate-950 hover:text-white transition-all">
-            <i class="fa-solid fa-id-card text-[11px] mr-1"></i>Caponero
+          <button id="btnRoleDriver" onclick="cambiarRol('conductor')" class="px-2.5 py-2 rounded-xl text-slate-300 hover:text-white transition-all flex items-center gap-1" title="Exclusivo para conductores con requisitos">
+            <i class="fa-solid fa-lock text-[10px] text-amber-400"></i><span>Caponero</span>
           </button>
         </div>
       </div>
 
-      <!-- Barra de Ciudad Nacional + Botón Instalar PWA (A4 + A5) -->
-      <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-950/10">
-        <div class="flex items-center gap-1.5 flex-1">
-          <i class="fa-solid fa-location-dot text-xs text-slate-900"></i>
-          <span class="text-[10px] font-black uppercase text-slate-900">Ciudad:</span>
-          <select id="citySelect" onchange="cambiarCiudadManual(this.value)" class="bg-white/90 text-slate-900 text-xs font-extrabold rounded-xl px-2.5 py-1 border border-slate-900/20 focus:outline-none shadow-sm flex-1">
-            <option value="Managua">Managua</option>
-            <option value="Masaya" selected>Masaya</option>
-            <option value="Granada">Granada</option>
-            <option value="Leon">León</option>
-            <option value="Chinandega">Chinandega</option>
-            <option value="Esteli">Estelí</option>
-            <option value="Matagalpa">Matagalpa</option>
-            <option value="Jinotega">Jinotega</option>
-            <option value="Rivas">Rivas</option>
-            <option value="Jinotepe">Jinotepe</option>
-            <option value="Boaco">Boaco</option>
-            <option value="Bluefields">Bluefields</option>
-          </select>
+      <!-- Buscador Abierto de CUALQUIER Pueblo, Municipio, Comarca o Barrio de Nicaragua + Botón Instalar -->
+      <div class="mt-2.5 flex items-center gap-1.5">
+        <div class="relative flex-1">
+          <i class="fa-solid fa-magnifying-glass-location absolute left-3 top-2.5 text-amber-400 text-xs"></i>
+          <input id="inputBuscarPueblo" list="listaPueblosNicaragua" onchange="irAPuebloOBuscar(this.value)" placeholder="Escribe tu pueblo, municipio o barrio..." class="w-full bg-slate-800/95 text-white placeholder-slate-400 text-xs font-bold rounded-xl pl-8 pr-7 py-2 border border-slate-600 focus:border-amber-400 focus:outline-none" />
+          <button onclick="centrarEnMiUbicacion()" title="Detectar mi pueblo por GPS" class="absolute right-1.5 top-1 bg-amber-400/20 hover:bg-amber-400/40 text-amber-300 px-2 py-1 rounded-lg text-[11px] font-black">
+            <i class="fa-solid fa-location-crosshairs"></i> GPS
+          </button>
+          <datalist id="listaPueblosNicaragua"></datalist>
         </div>
-        <button id="btnInstallApp" onclick="instalarApp()" class="px-3 py-1 rounded-xl bg-slate-950 text-white font-black text-[11px] flex items-center gap-1 shadow hover:bg-slate-800 active:scale-95 transition">
-          📲 Instalar App
+        <!-- Select oculto de compatibilidad para scripts externos -->
+        <select id="citySelect" class="hidden"><option value="Todo Nicaragua">Todo Nicaragua</option></select>
+
+        <button id="btnInstallApp" onclick="instalarApp()" class="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-[11px] font-black px-3 py-2 rounded-xl shadow-md flex items-center gap-1 active:scale-95 transition-all shrink-0">
+          <i class="fa-solid fa-mobile-screen-button"></i> <span>Instalar</span>
         </button>
       </div>
     </header>
 
-    <!-- ============================================================== -->
-    <!-- VISTA 1: MODO PASAJERO / CLIENTE                               -->
-    <!-- ============================================================== -->
-    <main id="viewPassenger" class="flex-1 p-4 flex flex-col gap-4 overflow-y-auto pb-28">
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="flex-1 flex flex-col relative pb-20">
 
-      <!-- Mini Mapa Interactivo en Vivo (MODO DÍA + CARTO VOYAGER A6) -->
-      <div class="relative bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-md">
-        <div id="map" class="w-full h-52 z-10"></div>
-        <div class="absolute bottom-2 left-2 z-20 bg-white/95 backdrop-blur-md border border-slate-200 px-2.5 py-1 rounded-full flex items-center gap-2 text-[10px] text-slate-700 font-bold shadow">
-          <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-          <span id="mapCaponerasCount">Red activa en <span class="city-name-label">Masaya</span></span>
-        </div>
-        <button onclick="detectarUbicacionGPS()" title="Detectar mi ciudad por GPS" class="absolute top-2 right-2 z-20 px-2.5 h-9 rounded-xl bg-white border border-slate-200 text-amber-600 font-extrabold text-[11px] flex items-center gap-1 hover:bg-slate-50 transition shadow">
-          <i class="fa-solid fa-crosshairs text-sm"></i> Mi GPS
-        </button>
-      </div>
+      <!-- ========================================== -->
+      <!-- VISTA 1: PASAJERO (DISEÑO SUPER-APP v3.0)  -->
+      <!-- ========================================== -->
+      <div id="viewPassenger" class="flex-1 flex flex-col">
 
-      <!-- Banner Servicio -->
-      <div class="p-3 rounded-2xl bg-amber-400 text-slate-950 font-black border border-amber-500 flex items-center justify-center gap-2 shadow-sm">
-        <i class="fa-solid fa-bolt text-base"></i>
-        <span class="text-xs tracking-wide">Transporte Comunitario de Pasajeros</span>
-      </div>
+        <!-- Mapa en Modo Día con Controles Flotantes Modernos -->
+        <div class="relative w-full h-64 bg-slate-200 border-b-2 border-slate-300 shadow-inner z-10">
+          <div id="map" class="w-full h-full"></div>
 
-      <!-- Formulario de Solicitud (M3: Campos limpios sin datos precargados) -->
-      <div class="bg-white border border-slate-200 p-4 rounded-3xl flex flex-col gap-3.5 shadow-md">
-        <div>
-          <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">
-            <i class="fa-solid fa-circle-dot text-emerald-600 mr-1"></i> Punto de recogida (Origen)
-          </label>
-          <input id="inputOrigin" type="text" placeholder="Ej: Parque Central / Mercado Municipal" value=""
-            class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition" />
-        </div>
-
-        <div>
-          <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">
-            <i class="fa-solid fa-location-dot text-rose-600 mr-1"></i> Punto de entrega / Destino
-          </label>
-          <input id="inputDestination" type="text" placeholder="Ej: Barrio San Jerónimo / Frente a la Shell" value=""
-            class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition" />
-        </div>
-
-        
-
-        <!-- Tarifa en Córdobas -->
-        <div class="pt-3 border-t border-slate-100">
-          <div class="flex justify-between items-center mb-1.5">
-            <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider">Tarifa Ofrecida (C$)</label>
-            <span class="text-[10px] text-emerald-700 font-bold flex items-center gap-1">
-              <i class="fa-solid fa-money-bill-wave"></i> Efectivo Directo
-            </span>
+          <!-- Píldora flotante superior: Estado de Red Comunitaria -->
+          <div class="absolute top-2.5 left-2.5 z-[400] bg-slate-950/85 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-amber-400/40 text-[11px] flex items-center gap-2 font-extrabold text-white shadow-lg">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span id="puebloDetectadoBadge">GPS: Cualquier Pueblo o Barrio 🇳🇮</span>
           </div>
 
-          <div class="flex items-center gap-2">
-            <button onclick="ajustarTarifa(-5)" class="w-12 h-12 rounded-2xl bg-slate-900 text-amber-400 font-black text-2xl active:scale-95 transition flex items-center justify-center shadow">−</button>
-            <div class="flex-1 bg-white border-2 border-amber-400 rounded-2xl px-3 py-1.5 flex items-center justify-center shadow-sm">
-              <span class="text-base text-amber-600 font-extrabold mr-1">C$</span>
-              <input id="inputFare" type="number" value="35" class="w-20 bg-transparent text-center font-black text-2xl text-slate-900 focus:outline-none" />
+          <!-- Botón flotante para centrar GPS en el pueblo del usuario -->
+          <button onclick="centrarEnMiUbicacion()" class="absolute bottom-3 right-3 z-[400] bg-slate-950 text-amber-400 hover:bg-slate-800 px-3.5 py-2 rounded-2xl shadow-xl border border-amber-400/50 flex items-center gap-1.5 font-black text-xs active:scale-90 transition-transform">
+            <i class="fa-solid fa-crosshairs"></i> Mi Ubicación
+          </button>
+        </div>
+
+        <!-- Panel de Solicitud Estilo InDrive / SuperApp -->
+        <div class="p-4 flex-1 flex flex-col gap-3.5 bg-gradient-to-b from-white to-slate-100 rounded-t-3xl -mt-3 z-20 shadow-[0_-10px_30px_rgba(15,23,42,0.12)] border-t border-slate-200">
+
+          <!-- Accesos Rápidos de Referencias Típicas en Pueblos de Nicaragua -->
+          <div>
+            <div class="flex justify-between items-center mb-1.5">
+              <span class="text-[11px] font-black uppercase tracking-wider text-slate-600"><i class="fa-solid fa-bolt text-amber-500 mr-1"></i>Referencias rápidas en tu pueblo:</span>
+              <span class="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">Sin comisión • Trato directo</span>
             </div>
-            <button onclick="ajustarTarifa(5)" class="w-12 h-12 rounded-2xl bg-slate-900 text-amber-400 font-black text-2xl active:scale-95 transition flex items-center justify-center shadow">+</button>
+            <div class="flex gap-1.5 overflow-x-auto pb-1">
+              <button type="button" onclick="usarReferenciaRapida('destino', 'Parque Central')" class="shrink-0 bg-slate-100 hover:bg-amber-100 text-slate-800 border border-slate-300 rounded-xl px-2.5 py-1.5 text-[11px] font-extrabold flex items-center gap-1 active:scale-95">
+                ⛪ Parque Central
+              </button>
+              <button type="button" onclick="usarReferenciaRapida('destino', 'Mercado Municipal')" class="shrink-0 bg-slate-100 hover:bg-amber-100 text-slate-800 border border-slate-300 rounded-xl px-2.5 py-1.5 text-[11px] font-extrabold flex items-center gap-1 active:scale-95">
+                🛒 Mercado
+              </button>
+              <button type="button" onclick="usarReferenciaRapida('destino', 'Centro de Salud / Hospital')" class="shrink-0 bg-slate-100 hover:bg-amber-100 text-slate-800 border border-slate-300 rounded-xl px-2.5 py-1.5 text-[11px] font-extrabold flex items-center gap-1 active:scale-95">
+                🏥 Centro de Salud
+              </button>
+              <button type="button" onclick="usarReferenciaRapida('destino', 'Terminal / Parada de Buses')" class="shrink-0 bg-slate-100 hover:bg-amber-100 text-slate-800 border border-slate-300 rounded-xl px-2.5 py-1.5 text-[11px] font-extrabold flex items-center gap-1 active:scale-95">
+                🚌 Parada / Buses
+              </button>
+            </div>
           </div>
 
-          <div class="flex gap-2 mt-2">
-            <button onclick="fijarTarifa(25)" class="flex-1 py-2 rounded-xl bg-white border-2 border-slate-200 text-xs font-black text-slate-700 hover:border-amber-500 active:scale-95 transition">C$ 25</button>
-            <button onclick="fijarTarifa(35)" class="flex-1 py-2 rounded-xl bg-white border-2 border-slate-200 text-xs font-black text-slate-700 hover:border-amber-500 active:scale-95 transition">C$ 35</button>
-            <button onclick="fijarTarifa(50)" class="flex-1 py-2 rounded-xl bg-white border-2 border-slate-200 text-xs font-black text-slate-700 hover:border-amber-500 active:scale-95 transition">C$ 50</button>
-            <button onclick="fijarTarifa(70)" class="flex-1 py-2 rounded-xl bg-white border-2 border-slate-200 text-xs font-black text-slate-700 hover:border-amber-500 active:scale-95 transition">C$ 70</button>
-          </div>
-        </div>
-
-        <div>
-          <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Tu Nombre</label>
-          <input id="inputPassengerName" type="text" placeholder="Escribe tu nombre" value=""
-            class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition" />
-        </div>
-
-        <div>
-          <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Tu WhatsApp / Teléfono (Obligatorio para coordinar)</label>
-          <input id="inputPassengerPhone" type="tel" placeholder="Ej: 88887777" value=""
-            class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition" />
-        </div>
-
-        <button id="btnRequestTrip" onclick="solicitarViaje()" class="w-full mt-1 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 text-slate-950 font-black py-4 rounded-2xl text-base transition shadow-lg active:scale-[0.98] flex items-center justify-center gap-2">
-          <i class="fa-solid fa-paper-plane"></i> PEDIR CAPONERA AHORA
-        </button>
-      </div>
-
-      <!-- Tarjeta de Estado del Pedido Activo -->
-      <div id="activeTripCard" class="hidden bg-white border-2 border-amber-400 p-4 rounded-3xl flex flex-col gap-3 relative overflow-hidden shadow-xl animate-fade-in">
-        <div class="flex justify-between items-center">
-          <span id="tripStatusBadge" class="text-[11px] font-black px-3 py-1 rounded-full bg-amber-500 text-slate-950 flex items-center gap-1.5 shadow">
-            <span class="w-2 h-2 rounded-full bg-slate-950 animate-ping"></span> BUSCANDO CAPONERA
-          </span>
-          <button onclick="cancelarViaje()" class="text-xs text-rose-600 hover:text-rose-500 font-extrabold transition">Cancelar</button>
-        </div>
-
-        <div id="searchRadar" class="py-5 flex flex-col items-center justify-center gap-2.5">
-          <div class="w-20 h-20 rounded-full bg-amber-100 border-2 border-amber-400 flex items-center justify-center text-amber-600 text-2xl pulse-radar shadow-inner">
-            <i class="fa-solid fa-motorcycle"></i>
-          </div>
-          <p class="text-xs font-bold text-slate-700 text-center">Alertando a unidades verificadas en <span class="city-name-label">Masaya</span>...</p>
-          <span class="text-[10px] text-slate-400">Bitácora de seguridad activa</span>
-        </div>
-
-        <!-- Datos de la Unidad Asignada (N2: Sin ETA estático falso) -->
-        <div id="driverDetails" class="hidden flex flex-col gap-3 pt-3 border-t border-slate-200">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 font-black text-2xl flex items-center justify-center shadow-lg">
-                <i class="fa-solid fa-id-badge"></i>
+          <!-- Tarjeta Conectada de Ruta (Origen -> Destino) -->
+          <div class="bg-slate-50 rounded-2xl p-3 border-2 border-slate-200 shadow-sm space-y-2.5 relative">
+            <div class="relative flex items-center">
+              <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-black mr-2.5 shrink-0 border border-emerald-300">
+                <i class="fa-solid fa-circle-dot text-sm"></i>
               </div>
-              <div>
-                <h4 id="driverName" class="font-extrabold text-sm text-slate-900">Unidad Asignada</h4>
-                <p id="driverUnit" class="text-xs text-amber-600 font-bold flex items-center gap-1">
-                  <i class="fa-solid fa-certificate"></i> Verificado en Red
-                </p>
-                <span class="text-[10px] text-slate-500">Bitácora registrada</span>
+              <div class="flex-1">
+                <label class="block text-[10px] font-black uppercase text-slate-500">¿Dónde te recoge el caponero?</label>
+                <input id="inputPickup" type="text" value="Mi ubicación actual (GPS)" placeholder="Barrio, calle, iglesia o referencia..." class="w-full bg-transparent text-sm text-slate-900 font-extrabold focus:outline-none" />
+              </div>
+              <button onclick=" limpiarInput('inputPickup')" class="text-slate-400 hover:text-slate-700 px-2">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            <div class="border-t border-dashed border-slate-300 my-1"></div>
+
+            <div class="relative flex items-center">
+              <div class="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-black mr-2.5 shrink-0 border border-rose-300">
+                <i class="fa-solid fa-location-dot text-sm"></i>
+              </div>
+              <div class="flex-1">
+                <label class="block text-[10px] font-black uppercase text-rose-600">¿A qué barrio, comarca o lugar vas?</label>
+                <input id="inputDest" type="text" placeholder="Ej: Del parque 2c al sur, o nombre del barrio/comarca..." class="w-full bg-transparent text-sm text-slate-900 font-extrabold focus:outline-none placeholder-slate-400" />
               </div>
             </div>
-            <div class="text-right">
-              <span class="text-[10px] text-slate-500 block uppercase font-bold">Estado</span>
-              <span id="etaTime" class="text-xs font-black text-emerald-600">En camino</span>
+          </div>
+
+          <!-- Datos de Contacto del Pasajero en Tarjeta Moderna -->
+          <div class="grid grid-cols-2 gap-2.5">
+            <div class="bg-white border-2 border-slate-200 rounded-2xl px-3 py-2 focus-within:border-amber-500">
+              <label class="block text-[10px] font-black uppercase text-slate-500"><i class="fa-solid fa-user text-amber-500 mr-1"></i>Tu Nombre</label>
+              <input id="inputPassengerName" type="text" placeholder="Ej: Doña María" class="w-full bg-transparent text-sm text-slate-900 font-bold focus:outline-none" />
+            </div>
+            <div class="bg-white border-2 border-emerald-300 rounded-2xl px-3 py-2 focus-within:border-emerald-600">
+              <label class="block text-[10px] font-black uppercase text-emerald-700"><i class="fa-brands fa-whatsapp mr-1"></i>Tu WhatsApp *</label>
+              <input id="inputPassengerPhone" type="tel" placeholder="8888-8888" class="w-full bg-transparent text-sm text-slate-900 font-black focus:outline-none" />
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-2 mt-1">
-            <a id="waContactBtn" href="#" target="_blank" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-md active:scale-95">
-              <i class="fa-brands fa-whatsapp text-sm"></i> WhatsApp
-            </a>
-            <button onclick="simularFinalizar()" class="bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-3 rounded-xl text-xs transition active:scale-95">
-              <i class="fa-solid fa-circle-check text-emerald-400 mr-1"></i> Completar
+          <!-- Nuevo Selector Visual de Pasaje (Tarjetas Estilo InDrive) -->
+          <div class="bg-slate-900 text-white p-3.5 rounded-2xl shadow-md border border-slate-800">
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-xs font-extrabold text-amber-400 flex items-center gap-1.5">
+                <i class="fa-solid fa-hand-holding-dollar"></i> ¿Cuánto ofreces de pasaje?
+              </span>
+              <span class="text-[10px] bg-white/10 text-slate-200 px-2 py-0.5 rounded-md font-bold">Efectivo al bajar</span>
+            </div>
+
+            <div class="grid grid-cols-4 gap-1.5">
+              <button onclick="seleccionarPrecio(30, this)" class="btn-precio py-2 rounded-xl border border-slate-700 bg-slate-800 text-white font-black text-xs hover:border-amber-400 transition-all flex flex-col items-center">
+                <span class="text-sm">C$30</span>
+                <span class="text-[9px] text-slate-400 font-semibold">Corta</span>
+              </button>
+              <button onclick="seleccionarPrecio(50, this)" class="btn-precio py-2 rounded-xl border-2 border-amber-400 bg-amber-400 text-slate-950 font-black text-xs shadow-md transition-all flex flex-col items-center">
+                <span class="text-sm">C$50</span>
+                <span class="text-[9px] text-slate-900 font-bold">Normal</span>
+              </button>
+              <button onclick="seleccionarPrecio(70, this)" class="btn-precio py-2 rounded-xl border border-slate-700 bg-slate-800 text-white font-black text-xs hover:border-amber-400 transition-all flex flex-col items-center">
+                <span class="text-sm">C$70</span>
+                <span class="text-[9px] text-slate-400 font-semibold">Larga</span>
+              </button>
+              <div class="relative flex items-center">
+                <span class="absolute left-2 text-amber-400 font-black text-xs">C$</span>
+                <input id="inputCustomPrice" type="number" value="50" onchange="actualizarPrecioManual(this.value)" class="w-full h-full bg-slate-950 border border-slate-700 rounded-xl pl-7 pr-1 text-sm font-black text-amber-400 focus:border-amber-400 focus:outline-none text-center" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Botón Principal de Solicitud -->
+          <button id="btnRequestRide" onclick="solicitarCaponera()" class="w-full bg-gradient-to-r from-amber-500 via-amber-400 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black py-4 rounded-2xl shadow-xl shadow-amber-500/25 flex items-center justify-center gap-2.5 text-base active:scale-[0.98] transition-all border-2 border-slate-950">
+            <i class="fa-solid fa-satellite-dish animate-bounce"></i>
+            <span>SOLICITAR CAPONERA AHORA</span>
+          </button>
+
+          <!-- Estado del Viaje en Curso -->
+          <div id="rideStatusModal" class="hidden bg-white border-2 border-amber-500 rounded-2xl p-4 text-center space-y-3 animate-fade-in shadow-xl">
+            <div id="statusSpinner" class="w-12 h-12 rounded-full bg-amber-500/20 border-2 border-amber-600 flex items-center justify-center mx-auto text-amber-600 text-xl pulse-radar">
+              <i class="fa-solid fa-motorcycle"></i>
+            </div>
+            <h3 id="statusTitle" class="font-black text-base text-slate-900">Avisando a caponeros cercanos en tu zona...</h3>
+            <p id="statusDesc" class="text-xs text-slate-600 font-semibold">Tu solicitud está sonando en el radar de tu municipio/pueblo.</p>
+
+            <div id="driverAssignedCard" class="hidden bg-slate-100 p-3 rounded-xl border border-slate-300 text-left flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-black text-base">
+                  <i class="fa-solid fa-user-check"></i>
+                </div>
+                <div>
+                  <p id="driverName" class="font-black text-sm text-slate-900">Conductor Asignado</p>
+                  <p id="driverUnit" class="text-xs text-amber-700 font-extrabold">Unidad verificada</p>
+                </div>
+              </div>
+              <a id="btnWhatsappDriver" href="#" target="_blank" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg">
+                <i class="fa-brands fa-whatsapp text-sm"></i> WhatsApp
+              </a>
+            </div>
+
+            <div class="flex gap-2 pt-1">
+              <button onclick="cancelarViaje()" class="flex-1 py-2 rounded-xl border border-rose-500/40 text-rose-600 text-xs font-extrabold hover:bg-rose-500/10">
+                Cancelar Solicitud
+              </button>
+              <button id="btnCompletePassenger" onclick="completarViajeActual()" class="hidden flex-1 py-2 rounded-xl bg-emerald-600 text-white text-xs font-black hover:bg-emerald-500">
+                ¡Ya llegué a mi destino!
+              </button>
+            </div>
+          </div>
+
+          <!-- Guía de Tarifas Comunitarias de Referencia -->
+          <div class="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-sm mt-1">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                <i class="fa-solid fa-map-location-dot text-amber-500"></i> Guía Comunitaria de Pasajes (Nicaragua)
+              </h3>
+              <span class="text-[10px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full font-extrabold">Acuerdo Justo</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[11px]">
+              <div class="bg-slate-50 p-2 rounded-xl border border-slate-200 flex justify-between items-center">
+                <span class="text-slate-700 font-bold">Carrera dentro del barrio</span>
+                <span class="font-black text-emerald-700">C$25 - C$35</span>
+              </div>
+              <div class="bg-slate-50 p-2 rounded-xl border border-slate-200 flex justify-between items-center">
+                <span class="text-slate-700 font-bold">Centro / Mercado / Parque</span>
+                <span class="font-black text-emerald-700">C$40 - C$50</span>
+              </div>
+              <div class="bg-slate-50 p-2 rounded-xl border border-slate-200 flex justify-between items-center">
+                <span class="text-slate-700 font-bold">Entre barrios / Comarcas</span>
+                <span class="font-black text-amber-700">C$60 - C$90</span>
+              </div>
+              <div class="bg-slate-50 p-2 rounded-xl border border-slate-200 flex justify-between items-center">
+                <span class="text-slate-700 font-bold">Con carga / Nocturno</span>
+                <span class="font-black text-rose-700">C$80 - C$120</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Vitrina Comercial Comunitaria -->
+          <div class="mt-1 space-y-2.5">
+            <div class="flex items-center justify-between px-1">
+              <span class="text-[11px] font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <i class="fa-solid fa-store text-amber-600"></i> Comercios y Servicios Locales
+              </span>
+              <a href="https://wa.me/50589130414?text=Hola,%20quiero%20anunciar%20mi%20negocio%20en%20Caponera%20App" target="_blank" class="text-[11px] text-amber-700 hover:underline font-extrabold">
+                + Anunciar mi negocio
+              </a>
+            </div>
+            <div id="anunciosContainer" class="space-y-2"></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ======================================================== -->
+      <!-- VISTA 2: PANEL DE CONDUCTOR (SOLO TRAS PASAR EL CANDADO) -->
+      <!-- ======================================================== -->
+      <div id="viewDriver" class="hidden flex-1 flex flex-col p-4 space-y-4">
+        <div class="bg-white p-4 rounded-2xl border border-slate-300 flex items-center justify-between shadow-md">
+          <div class="flex items-center gap-3">
+            <div id="driverStatusDot" class="w-4 h-4 rounded-full bg-emerald-600 animate-ping"></div>
+            <div>
+              <h2 class="font-black text-sm text-slate-900">Radar Caponero Activo en tu Municipio</h2>
+              <p id="driverSubStatus" class="text-xs text-slate-600 font-semibold">Recibiendo solicitudes de pasajeros cercanos...</p>
+            </div>
+          </div>
+          <button id="btnToggleShift" onclick="toggleDriverOnline()" class="bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-black border border-emerald-700 shadow">
+            EN LÍNEA
+          </button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div class="bg-gradient-to-br from-emerald-50 to-teal-100 border border-emerald-300 rounded-2xl p-3 flex items-center justify-between">
+            <div>
+              <p class="text-[10px] font-black uppercase text-emerald-900">Ganancia Hoy</p>
+              <p id="driverEarningsToday" class="text-xl font-black text-emerald-950">C$ 0</p>
+            </div>
+            <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center">
+              <i class="fa-solid fa-sack-dollar"></i>
+            </div>
+          </div>
+          <div class="bg-gradient-to-br from-amber-50 to-yellow-100 border border-amber-300 rounded-2xl p-3 flex items-center justify-between">
+            <div>
+              <p class="text-[10px] font-black uppercase text-amber-900">Carreras Hoy</p>
+              <p id="driverTripsToday" class="text-xl font-black text-amber-950">0</p>
+            </div>
+            <div class="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center">
+              <i class="fa-solid fa-route"></i>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white p-3.5 rounded-2xl border border-slate-300 space-y-2.5 shadow-sm">
+          <div class="flex justify-between items-center">
+            <p class="text-xs text-amber-700 font-black uppercase flex items-center gap-1.5">
+              <i class="fa-solid fa-id-badge"></i> Credencial de Unidad Afiliada
+            </p>
+            <button onclick="abrirModalRegistroDriver()" class="text-[11px] font-extrabold text-indigo-700 underline">
+              Ver / Cambiar Token
             </button>
           </div>
-          <!-- N3: Reportar Problema al Operador / Dispatcher -->
-          <div class="pt-2 border-t border-slate-100 flex justify-between items-center text-[11px]">
-            <span class="text-slate-500">¿Inconveniente con el servicio?</span>
-            <a id="btnReportIssue" href="https://wa.me/50589130414?text=Reporte%20de%20soporte%20al%20operador" target="_blank"
-               class="text-rose-600 hover:text-rose-500 font-bold flex items-center gap-1 transition">
-              <i class="fa-solid fa-triangle-exclamation"></i> Reportar al Operador
-            </a>
+          <div class="grid grid-cols-2 gap-2">
+            <input id="driverNameInput" type="text" value="Caponero Afiliado" placeholder="Tu Nombre / Apodo" class="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold" />
+            <input id="driverPhoneInput" type="tel" value="" placeholder="Tu WhatsApp (8 dígitos)" class="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold" />
           </div>
         </div>
+
+        <div class="flex-1 space-y-3">
+          <div class="flex justify-between items-center">
+            <h3 class="text-xs font-black uppercase tracking-wider text-slate-700">Pasajeros esperando caponera</h3>
+            <button onclick="cargarViajesPendientes()" class="text-xs text-amber-700 hover:underline flex items-center gap-1 font-extrabold">
+              <i class="fa-solid fa-rotate"></i> Actualizar Radar
+            </button>
+          </div>
+          <div id="driverRequestsList" class="space-y-3"></div>
+        </div>
       </div>
-
-      <!-- ============================================================== -->
-      <!-- SECCIÓN DE PUBLICIDAD DINÁMICA POR CIUDAD (A3)                 -->
-      <!-- ============================================================== -->
-      <section class="mt-2 flex flex-col gap-3">
-        <div class="flex justify-between items-center px-1">
-          <h3 class="text-xs font-black text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
-            <i class="fa-solid fa-fire text-rose-600"></i> Comercios &amp; Ofertas en <span class="city-name-label">Masaya</span>
-          </h3>
-          <span class="text-[10px] bg-white border border-slate-200 text-slate-500 font-bold px-2 py-0.5 rounded-full">Destacados</span>
-        </div>
-
-        <div id="adsContainer" class="flex flex-col gap-3">
-          <!-- Cargado dinámicamente desde /api/anuncios?ciudad= -->
-        </div>
-      </section>
-
-      <!-- Footer Legal -->
-      <footer class="pt-3 pb-1 text-center text-[10px] text-slate-500 flex flex-col items-center gap-1.5 border-t border-slate-200 mt-2">
-        <div class="flex items-center gap-2.5">
-          <button onclick="mostrarPrivacidad()" class="text-slate-500 hover:text-amber-600 transition underline underline-offset-2">Política de Privacidad</button>
-          <span>&bull;</span>
-          <a href="/instalar.html" class="text-slate-500 hover:text-amber-600 transition underline underline-offset-2">Cómo Instalar</a>
-          <span>&bull;</span>
-          <a href="/privacidad.html" target="_blank" class="text-slate-500 hover:text-amber-600 transition underline underline-offset-2">Protección de Datos</a>
-        </div>
-        <p class="text-slate-400 text-[9px]">© 2026 Caponera App Nicaragua &bull; Plataforma comunitaria protegida.</p>
-      </footer>
 
     </main>
 
-    <!-- ============================================================== -->
-    <!-- VISTA 2: MODO CONDUCTOR / REPARTIDOR (C1 + N1)                 -->
-    <!-- ============================================================== -->
-    <main id="viewDriver" class="hidden flex-1 p-4 flex flex-col gap-4 overflow-y-auto pb-28">
-
-      <!-- Switch Disponibilidad & Ganancias Reales (N1) -->
-      <div class="bg-white border border-slate-200 p-4 rounded-3xl flex flex-col gap-3 shadow-md">
-        <div class="flex justify-between items-center">
-          <div>
-            <h3 id="driverHeaderUnit" class="font-black text-sm text-slate-900 flex items-center gap-1.5">
-              <i class="fa-solid fa-motorcycle text-amber-500"></i> Unidad Verificada
-            </h3>
-            <p id="driverHeaderName" class="text-xs text-slate-500">Conductor Activo</p>
-          </div>
-          <button id="btnToggleDriverStatus" onclick="toggleDisponibilidad()" class="px-3.5 py-1.5 rounded-full text-xs font-black bg-emerald-500 text-slate-950 flex items-center gap-1.5 shadow-md active:scale-95 transition">
-            <span class="w-2 h-2 rounded-full bg-slate-950"></span> DISPONIBLE
-          </button>
-        </div>
-
-        <div class="grid grid-cols-2 gap-3 pt-3 border-t border-slate-100">
-          <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 shadow-inner">
-            <span class="text-[10px] text-slate-500 uppercase font-black">Ganado Hoy</span>
-            <div id="driverEarnedToday" class="text-lg font-black text-emerald-600">C$ 0</div>
-          </div>
-          <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 shadow-inner">
-            <span class="text-[10px] text-slate-500 uppercase font-black">Servicios Hoy</span>
-            <div id="driverTripsToday" class="text-lg font-black text-amber-600">0 completados</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Feed de Solicitudes Disponibles -->
-      <div>
-        <div class="flex justify-between items-center mb-2 px-1">
-          <h3 class="text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> Solicitudes en <span class="city-name-label">Masaya</span>
-          </h3>
-          <span id="requestsCount" class="text-[10px] bg-white border border-slate-200 text-amber-700 font-bold px-2 py-0.5 rounded-full">Sincronizando...</span>
-        </div>
-
-        <div id="driverFeed" class="flex flex-col gap-3"></div>
-      </div>
-    </main>
-
-    <!-- Navegación Inferior Móvil -->
-    <nav class="bg-white/95 backdrop-blur-md border-t border-slate-200 p-2.5 flex justify-around items-center sticky bottom-0 z-40 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
-      <button onclick="cambiarRol('pasajero')" class="flex flex-col items-center text-xs font-extrabold text-amber-600 hover:text-amber-500 active:scale-95 transition">
-        <i class="fa-solid fa-map-location-dot text-base mb-1"></i>
-        <span>Pedir</span>
-      </button>
-      <button onclick="cambiarRol('conductor')" class="flex flex-col items-center text-xs font-extrabold text-slate-500 hover:text-amber-600 active:scale-95 transition">
-        <i class="fa-solid fa-route text-base mb-1"></i>
-        <span>Caponero</span>
-      </button>
-      <button onclick="mostrarTarifario()" class="flex flex-col items-center text-xs font-extrabold text-slate-500 hover:text-amber-600 active:scale-95 transition">
-        <i class="fa-solid fa-tags text-base mb-1"></i>
-        <span>Tarifas</span>
-      </button>
-      <button onclick="mostrarPrivacidad()" class="flex flex-col items-center text-xs font-extrabold text-slate-500 hover:text-emerald-600 active:scale-95 transition">
-        <i class="fa-solid fa-shield-halved text-base mb-1"></i>
-        <span>Legal</span>
-      </button>
-    </nav>
-
-    <!-- Modal Tarifario de Referencia (A2) -->
-    <div id="fareModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-      <div class="bg-white border border-slate-200 w-full max-w-xs rounded-3xl p-5 shadow-2xl flex flex-col gap-3">
-        <h3 class="font-black text-sm text-amber-600 flex items-center gap-2">
-          <i class="fa-solid fa-circle-info"></i> Tarifas Sugeridas de Referencia
-        </h3>
-        <p class="text-[11px] text-slate-500">Precios referenciales sugeridos en <span class="city-name-label">Masaya</span>:</p>
-        <ul class="text-xs text-slate-600 flex flex-col gap-2.5 divide-y divide-slate-100">
-          <li class="pt-2 flex justify-between"><span>Casco Urbano / Centro:</span> <strong class="text-slate-900">C$ 25 - 35</strong></li>
-          <li class="pt-2 flex justify-between"><span>Hacia Barrios / Repartos:</span> <strong class="text-slate-900">C$ 35 - 50</strong></li>
-          <li class="pt-2 flex justify-between"><span>Comarcas / Distancias largas:</span> <strong class="text-slate-900">C$ 60 - 100</strong></li>
-        </ul>
-        <button onclick="ocultarTarifario()" class="w-full mt-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl text-xs transition active:scale-95">¡Entendido!</button>
-      </div>
-    </div>
-
-    <!-- Modal Registro Obligatorio de Conductor / Repartidor (C1) -->
-    <div id="driverRegisterModal" class="hidden fixed inset-0 bg-slate-900/75 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
-      <div class="bg-white border border-slate-200 w-full max-w-sm rounded-3xl p-5 shadow-2xl flex flex-col gap-3.5 max-h-[90vh] overflow-y-auto">
-        <div class="flex justify-between items-center border-b border-slate-200 pb-3">
-          <div class="flex items-center gap-2">
-            <span class="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-sm font-black border border-amber-200">
-              <i class="fa-solid fa-id-card"></i>
-            </span>
+    <!-- ========================================================================= -->
+    <!-- CANDADO DE CAPONERO (MODAL DE REQUISITOS OBLIGATORIOS - C1)               -->
+    <!-- Si un cliente entra por curiosidad, ve los requisitos y regresa a Cliente -->
+    <!-- ========================================================================= -->
+    <div id="modalRegistroDriver" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+      <div class="bg-white border-2 border-amber-400 rounded-3xl max-w-sm w-full p-5 space-y-3.5 shadow-2xl animate-fade-in max-h-[92vh] overflow-y-auto">
+        
+        <!-- Aviso claro para el cliente curioso -->
+        <div class="bg-amber-50 border-2 border-amber-300 rounded-2xl p-3 flex flex-col gap-2">
+          <div class="flex items-center gap-2.5">
+            <div class="w-10 h-10 rounded-2xl bg-slate-950 text-amber-400 flex items-center justify-center font-black text-lg shrink-0">
+              <i class="fa-solid fa-user-shield"></i>
+            </div>
             <div>
-              <h3 class="font-black text-sm text-slate-900">Registro de Caponero</h3>
-              <p class="text-[10px] text-emerald-600 font-bold">Activación Inmediata &bull; Acceso Protegido</p>
+              <h3 class="font-black text-sm text-slate-900 leading-tight">🔒 Acceso Exclusivo para Conductores</h3>
+              <p class="text-[11px] text-slate-700 font-semibold">Para ver y aceptar carreras debes registrar los requisitos de tu caponera.</p>
             </div>
           </div>
-          <button onclick="cerrarRegistroConductor()" class="w-7 h-7 rounded-full bg-slate-100 text-slate-500 hover:text-slate-900 flex items-center justify-center text-xs">
-            <i class="fa-solid fa-xmark"></i>
+          <button type="button" onclick="cerrarModalDriverYVolverCliente()" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-md flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-arrow-left"></i> Soy Pasajero — Volver a pedir mi viaje
           </button>
         </div>
 
-        <div id="driverRegisterForm" class="space-y-3 text-xs">
+        <div class="space-y-2">
+          <p class="text-[11px] font-black uppercase tracking-wider text-slate-500">Requisitos de afiliación (Todo Nicaragua):</p>
           <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Nombre Completo</label>
-            <input id="regDriverName" type="text" placeholder="Ej: José Ramón Pérez"
-              class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-amber-500 transition" />
+            <label class="text-[10px] font-black uppercase text-slate-700">1. Nombre Completo del Conductor *</label>
+            <input id="regDriverNombre" type="text" placeholder="Ej: Juan Carlos Pérez" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900" />
           </div>
-          <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">N° de Cédula de Identidad</label>
-            <input id="regDriverCedula" type="text" placeholder="Ej: 401-150588-0001A"
-              class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-amber-500 transition" />
-            <span class="text-[9px] text-slate-500">Dato privado resguardado. Nunca se muestra en público.</span>
-          </div>
-          <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">WhatsApp de Contacto</label>
-            <input id="regDriverPhone" type="tel" placeholder="Ej: 88887777"
-              class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-amber-500 transition" />
-          </div>
-          <div>
-            <label class="text-[10px] font-black text-slate-500 uppercase tracking-wider block mb-1">Placa o Número de Unidad</label>
-            <input id="regDriverPlate" type="text" placeholder="Ej: MY-1029 / Unidad #7"
-              class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-amber-500 transition" />
-          </div>
-          <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-            <label class="flex items-start gap-2 text-[11px] text-slate-700 cursor-pointer">
-              <input id="regDriverRules" type="checkbox" class="mt-0.5 rounded text-amber-500 focus:ring-0" />
-              <span>Acepto las <strong>Reglas de la Red</strong> (respeto al usuario, tarifa acordada y normas viales).</span>
-            </label>
-          </div>
-          <button onclick="enviarRegistroConductor()" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-3 rounded-xl text-xs transition active:scale-95 shadow">
-            Completar Registro y Activar
-          </button>
-          <div class="text-center pt-2 border-t border-slate-100">
-            <button onclick="mostrarIngresoToken()" class="text-[11px] text-amber-700 font-bold hover:underline">¿Ya tienes tu PIN/Token de Caponero? Ingresar clave</button>
-          </div>
-        </div>
-
-        <div id="driverTokenDisplay" class="hidden space-y-3 text-xs">
-          <div class="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl space-y-2">
-            <div class="flex items-center gap-1.5 text-emerald-700 font-extrabold text-xs">
-              <i class="fa-solid fa-circle-check"></i> ¡REGISTRO COMPLETADO!
-            </div>
-            <p class="text-[11px] text-slate-700">Guarda tu <strong>PIN / Token de acceso</strong> (se muestra una sola vez):</p>
-            <div class="bg-white p-2.5 rounded-xl border border-emerald-300 text-xs font-mono text-emerald-800 font-bold flex justify-between items-center select-all">
-              <span id="createdDriverToken">DRV-...</span>
-              <button onclick="copiarTokenCreado()" class="text-[10px] text-amber-600 font-bold hover:underline">Copiar</button>
-            </div>
-          </div>
-          <button onclick="entrarModoConductor()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 rounded-xl text-xs transition active:scale-95 shadow">
-            ¡Entendido! Entrar a Modo Caponero
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Modal de Privacidad -->
-    <div id="privacyModal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
-      <div class="bg-white border border-slate-200 w-full max-w-sm rounded-3xl p-5 shadow-2xl flex flex-col gap-3.5 max-h-[85vh] overflow-y-auto">
-        <div class="flex justify-between items-center border-b border-slate-200 pb-3">
-          <div class="flex items-center gap-2">
-            <span class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-sm font-black border border-emerald-200">
-              <i class="fa-solid fa-shield-halved"></i>
-            </span>
+          <div class="grid grid-cols-2 gap-2">
             <div>
-              <h3 class="font-black text-sm text-slate-900">Privacidad y Protección de Datos</h3>
-              <p class="text-[10px] text-slate-500 font-mono">Privacidad Nicaragua &bull; Caponera App</p>
+              <label class="text-[10px] font-black uppercase text-slate-700">2. WhatsApp *</label>
+              <input id="regDriverTelefono" type="tel" placeholder="8888-8888" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900" />
+            </div>
+            <div>
+              <label class="text-[10px] font-black uppercase text-slate-700">3. Placa / Unidad *</label>
+              <input id="regDriverPlaca" type="text" placeholder="Ej: M-402 / Unidad 15" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900" />
             </div>
           </div>
-          <button onclick="ocultarPrivacidad()" class="w-7 h-7 rounded-full bg-slate-100 text-slate-500 hover:text-slate-900 flex items-center justify-center text-xs">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
+          <div>
+            <label class="text-[10px] font-black uppercase text-slate-700">4. Número de Cédula (Respaldo de Seguridad) *</label>
+            <input id="regDriverCedula" type="text" placeholder="Ej: 401-000000-0000A" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900" />
+          </div>
+          <label class="flex items-start gap-2 text-[11px] text-slate-700 font-semibold pt-1 cursor-pointer bg-slate-50 p-2 rounded-xl border border-slate-200">
+            <input id="regDriverReglas" type="checkbox" class="mt-0.5 accent-amber-500" />
+            <span>Acepto las reglas de respeto al pasajero, cobro justo acordado y conducción segura en mi municipio.</span>
+          </label>
         </div>
-        <div class="space-y-2.5 text-xs text-slate-600">
-          <p><strong>1. GPS en tiempo real:</strong> Solo se utiliza para ubicar tu ciudad y punto de recogida mientras usas la app.</p>
-          <p><strong>2. Privacidad de teléfono y cédula:</strong> El teléfono del cliente solo se comparte con el conductor que acepta el servicio. La cédula del conductor jamás es pública.</p>
-          <p><strong>3. Enlace directo comunitario:</strong> Las tarifas se acuerdan en efectivo directo entre usuario y conductor.</p>
-        </div>
-        <button onclick="ocultarPrivacidad()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-2.5 rounded-xl text-xs transition active:scale-95 shadow">
-          Entendido
+
+        <button onclick="registrarConductorCaponera()" class="w-full py-3 rounded-xl bg-slate-950 hover:bg-slate-800 text-amber-400 font-black text-xs shadow-lg flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-id-card-clip"></i> ENVIAR REQUISITOS Y ACTIVAR RADAR
         </button>
+
+        <div class="border-t border-slate-200 pt-2.5 space-y-1.5">
+          <label class="text-[10px] font-black uppercase text-slate-500">¿Ya estás afiliado? Ingresa tu Token CP-DRV:</label>
+          <div class="flex gap-1.5">
+            <input id="inputExistingDriverToken" type="text" placeholder="Pega tu token CP-DRV..." class="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-900" />
+            <button onclick="guardarTokenConductorManual()" class="bg-amber-400 text-slate-950 px-3 py-1.5 rounded-xl text-xs font-black">Activar</button>
+          </div>
+        </div>
       </div>
+    </div>
+
+    <!-- Modal Guía de Instalación manual (Fallback Android / iPhone) -->
+    <div id="modalInstallGuide" class="hidden fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+      <div class="bg-white border-2 border-amber-400 rounded-3xl max-w-sm w-full p-5 space-y-3 shadow-2xl animate-fade-in">
+        <div class="flex items-center justify-between">
+          <h3 class="font-black text-base text-slate-900">📲 Instalar Caponera App</h3>
+          <button onclick="document.getElementById('modalInstallGuide').classList.add('hidden')" class="text-slate-400 hover:text-slate-700">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+        <p class="text-xs text-slate-700 font-semibold">Instálala gratis en tu pantalla de inicio en 2 toques (sin gastar memoria):</p>
+        <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs space-y-2 text-slate-800 font-bold">
+          <p>🤖 <strong>En Android (Chrome):</strong> Toca los <strong>3 puntitos (⋮)</strong> arriba a la derecha y selecciona <strong>"Instalar aplicación"</strong> o <strong>"Agregar a la pantalla principal"</strong>.</p>
+          <p>🍎 <strong>En iPhone (Safari):</strong> Toca el botón <strong>Compartir (⬆️)</strong> abajo y selecciona <strong>"Agregar a Inicio"</strong>.</p>
+        </div>
+        <button onclick="document.getElementById('modalInstallGuide').classList.add('hidden')" class="w-full py-2.5 rounded-xl bg-amber-500 text-slate-950 font-black text-xs">Entendido</button>
+      </div>
+    </div>
+
+    <!-- Footer Fijo Minimalista -->
+    <footer class="bg-white border-t border-slate-300 px-4 py-2.5 flex justify-between items-center text-[11px] text-slate-600 fixed bottom-0 w-full max-w-md z-30 shadow-lg">
+      <span class="font-bold"><i class="fa-solid fa-shield-halved text-amber-600 mr-1"></i> Caponera App &bull; Red Nacional 🇳🇮</span>
+      <div class="flex items-center gap-3">
+        <a href="/instalar" class="text-emerald-700 hover:underline font-extrabold">📲 Instalar</a>
+        <a href="/privacidad.html" class="text-slate-600 hover:text-slate-900 underline font-semibold">Privacidad</a>
+        <a href="https://wa.me/50589130414?text=Hola,%20necesito%20soporte%20con%20Caponera%20App" target="_blank" class="text-rose-600 hover:text-rose-700 font-extrabold flex items-center gap-1">
+          <i class="fa-solid fa-triangle-exclamation"></i> Soporte
+        </a>
+      </div>
+    </footer>
+
+    <!-- Notificación Flotante (Toast) -->
+    <div id="toast" class="fixed top-20 left-1/2 -translate-x-1/2 bg-slate-950 text-white px-4 py-2.5 rounded-2xl shadow-2xl border border-amber-400/50 text-xs font-extrabold flex items-center gap-2 z-50 transition-all duration-300 opacity-0 pointer-events-none">
+      <i class="fa-solid fa-bell text-amber-400"></i>
+      <span id="toastText">Red Nacional Activa 🇳🇮</span>
     </div>
 
   </div>
 
-  <!-- ============================================================== -->
-  <!-- JAVASCRIPT: NACIONALIZACIÓN A1-A6 + SEGURIDAD C1-C3 + N1       -->
-  <!-- ============================================================== -->
+  <!-- LÓGICA DE APLICACIÓN NACIONAL ABIERTA A TODOS LOS PUEBLOS Y MUNICIPIOS -->
   <script>
-    const CIUDADES_NIC = {
-      Managua: [12.1149, -86.2362],
-      Masaya: [12.1364, -86.2514],
-      Granada: [11.9299, -85.9560],
-      Leon: [12.4379, -86.8780],
-      Chinandega: [12.6294, -87.1311],
-      Esteli: [13.0926, -86.3528],
-      Matagalpa: [12.9290, -85.9168],
-      Jinotega: [13.0917, -86.0035],
-      Rivas: [11.4372, -85.8250],
-      Jinotepe: [11.8496, -86.1990],
-      Boaco: [12.4722, -85.6576],
-      Bluefields: [12.0137, -83.7635]
+
+    const PUEBLOS_NICARAGUA = {
+      "Masaya": [11.9744, -86.0942], "Nindirí": [12.0039, -86.1214], "Catarina": [11.9119, -86.0739],
+      "Niquinohomo": [11.9053, -86.0945], "Masatepe": [11.9145, -86.1447], "San Juan de Oriente": [11.9061, -86.0647],
+      "Nandasmo": [11.9244, -86.1208], "Tisma": [12.0819, -86.0172], "La Concepción (La Concha)": [11.9361, -86.1897],
+      "Managua": [12.1149, -86.2362], "Tipitapa": [12.1973, -86.0971], "Ciudad Sandino": [12.1589, -86.3442],
+      "Ticuantepe": [12.0226, -86.2049], "El Crucero": [11.9922, -86.3094], "Mateare": [12.2351, -86.4281],
+      "San Rafael del Sur": [11.8485, -86.4384], "Villa El Carmen": [11.9801, -86.5056],
+      "Granada": [11.9299, -85.9560], "Diriomo": [11.8761, -86.0522], "Diriá": [11.8842, -86.0558],
+      "Nandaime": [11.7569, -86.0529], "Jinotepe": [11.8496, -86.1990], "Diriamba": [11.8581, -86.2392],
+      "San Marcos": [11.9094, -86.2035], "Dolores": [11.8564, -86.2158], "Santa Teresa": [11.7433, -86.2142],
+      "La Paz de Carazo": [11.8231, -86.1278], "El Rosario": [11.8375, -86.1636],
+      "Rivas": [11.4372, -85.8250], "San Jorge": [11.4558, -85.8031], "San Juan del Sur": [11.2529, -85.8705],
+      "Moyogalpa (Ometepe)": [11.5401, -85.6980], "Altagracia (Ometepe)": [11.5664, -85.5784],
+      "Tola": [11.4392, -85.9389], "Belén": [11.5031, -85.8894], "Potosí": [11.4942, -85.8569],
+      "Buenos Aires": [11.4692, -85.8167], "Cárdenas": [11.1964, -85.5089],
+      "León": [12.4379, -86.8780], "Nagarote": [12.2659, -86.5647], "La Paz Centro": [12.3400, -86.6753],
+      "Telica": [12.5225, -86.8592], "Quezalguaque": [12.5069, -86.9028], "El Sauce": [12.8869, -86.5392],
+      "Malpaisillo (Larreynaga)": [12.6767, -86.6711], "Achuapa": [13.0533, -86.5900],
+      "Chinandega": [12.6294, -87.1311], "El Viejo": [12.6635, -87.1672], "Corinto": [12.4825, -87.1730],
+      "Chichigalpa": [12.5776, -87.0270], "Posoltega": [12.5442, -86.9797], "El Realejo": [12.5433, -87.1653],
+      "Somotillo": [13.0439, -86.9050], "Villanueva": [12.9636, -86.8147],
+      "Estelí": [13.0926, -86.3528], "Condega": [13.3650, -86.3985], "La Trinidad": [12.9688, -86.2353],
+      "Pueblo Nuevo": [13.3798, -86.4808], "San Juan de Limay": [13.1767, -86.6122],
+      "Matagalpa": [12.9290, -85.9168], "Sébaco": [12.8532, -86.0963], "Ciudad Darío": [12.7314, -86.1243],
+      "San Isidro": [12.9297, -86.1953], "Río Blanco": [12.9344, -85.2235], "Matiguás": [12.8373, -85.4622],
+      "Tuma - La Dalia": [13.1361, -85.7350], "San Ramón": [12.9233, -85.8386], "Muy Muy": [12.7622, -85.6292],
+      "Waslala": [13.3333, -85.3833], "Rancho Grande": [13.2525, -85.5536],
+      "Jinotega": [13.0917, -86.0035], "San Rafael del Norte": [13.2125, -86.1109], "Wiwilí": [13.6267, -85.8256],
+      "El Cuá": [13.3684, -85.6733], "Santa María de Pantasma": [13.3667, -85.9500],
+      "Ocotal": [13.6321, -86.4752], "Jalapa": [13.9222, -86.1235], "Quilalí": [13.5669, -86.0260],
+      "El Jícaro": [13.7222, -86.1342], "Mozonte": [13.6603, -86.4356],
+      "Somoto": [13.4808, -86.5821], "Palacagüina": [13.4557, -86.4082], "Telpaneca": [13.5317, -86.2872],
+      "San Juan del Río Coco": [13.5447, -86.1650],
+      "Boaco": [12.4722, -85.6576], "Camoapa": [12.3835, -85.5116], "Teustepe": [12.4203, -85.8144],
+      "San Lorenzo": [12.3781, -85.6664],
+      "Juigalpa": [12.1063, -85.3645], "Santo Tomás": [12.0694, -85.0906], "Acoyapa": [11.9703, -85.1711],
+      "Villa Sandino": [12.0486, -84.9969], "La Libertad": [12.2164, -85.1658],
+      "Nueva Guinea": [11.6876, -84.4562], "El Rama": [12.1597, -84.2195], "Muelle de los Bueyes": [12.0697, -84.5358],
+      "San Carlos (Río San Juan)": [11.1236, -84.7780], "San Miguelito": [11.4025, -84.8997],
+      "Bluefields": [12.0137, -83.7635], "Corn Island": [12.1694, -83.0417], "Laguna de Perlas": [12.3428, -83.6714],
+      "Bilwi (Puerto Cabezas)": [14.0351, -83.3888], "Siuna": [13.7332, -84.7773],
+      "Bonanza": [14.0289, -84.5910], "Rosita": [13.9261, -84.4033], "Waspam": [14.7419, -83.9717]
     };
 
-    function ciudadMasCercana(lat, lng) {
-      let best = 'Masaya', minD = 1e9;
-      for (const [c, [la, ln]] of Object.entries(CIUDADES_NIC)) {
-        const d = (la - lat) ** 2 + (ln - lng) ** 2;
-        if (d < minD) { minD = d; best = c; }
-      }
-      return best;
-    }
-
-    let currentCoords = CIUDADES_NIC['Masaya'].slice();
+    let currentRole = 'pasajero';
+    let selectedPrice = 50;
+    let activeRideId = localStorage.getItem('caponera_active_ride_id') || null;
+    let activeSessionToken = localStorage.getItem('caponera_session_token') || null;
+    let driverToken = localStorage.getItem('caponera_driver_token') || '';
+    let driverOnline = true;
     let mapInstance = null;
-    let userMarker = null;
-    let driverMarkers = [];
+    let userCoords = [11.9744, -86.0942];
+    let currentCity = localStorage.getItem('caponera_ciudad') || 'Todo Nicaragua';
     let deferredInstallPrompt = null;
 
-    // A5: Capturar evento de instalación PWA
+    // Llenar datalist con los 95+ pueblos y municipios de referencia (y permite escribir cualquier otro)
+    function inicializarBuscadorPueblos() {
+      const dl = document.getElementById('listaPueblosNicaragua');
+      if (!dl) return;
+      dl.innerHTML = Object.keys(PUEBLOS_NICARAGUA).map(p => `<option value="${p}"></option>`).join('');
+    }
+
+    function actualizarEtiquetasPueblo(nombreLugar) {
+      currentCity = nombreLugar || 'Todo Nicaragua';
+      localStorage.setItem('caponera_ciudad', currentCity);
+      document.querySelectorAll('.city-name-label').forEach(el => { el.innerText = currentCity; });
+      const badge = document.getElementById('puebloDetectadoBadge');
+      if (badge) badge.innerText = `📍 ${currentCity} • En Vivo`;
+    }
+
+    // Geocodificación inversa gratuita (OpenStreetMap Nominatim) para detectar CUALQUIER pueblo, comarca o barrio real
+    async function detectarNombrePuebloPorGPS(lat, lng) {
+      try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=14&accept-language=es`;
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (res.ok) {
+          const data = await res.json();
+          const addr = data.address || {};
+          const pueblo = addr.town || addr.city || addr.village || addr.municipality || addr.suburb || addr.hamlet || addr.county || data.name;
+          const depto = addr.state || '';
+          if (pueblo) {
+            const label = (depto && !pueblo.includes(depto)) ? `${pueblo}, ${depto}` : pueblo;
+            actualizarEtiquetasPueblo(label);
+            cargarAnunciosCiudad(pueblo);
+            return;
+          }
+        }
+      } catch (e) {}
+      // Fallback por cercanía matemática si no hay respuesta de red externa
+      let mejor = 'Tu Municipio', minD = 1e9;
+      for (const [nombre, [la, ln]] of Object.entries(PUEBLOS_NICARAGUA)) {
+        const d = (la - lat) ** 2 + (ln - lng) ** 2;
+        if (d < minD) { minD = d; mejor = nombre; }
+      }
+      actualizarEtiquetasPueblo(mejor);
+      cargarAnunciosCiudad(mejor);
+    }
+
+    // Buscar cualquier pueblo, municipio, comarca o barrio escrito por el usuario
+    async function irAPuebloOBuscar(texto) {
+      const q = (texto || '').trim();
+      if (!q) return;
+      if (PUEBLOS_NICARAGUA[q]) {
+        const coords = PUEBLOS_NICARAGUA[q];
+        userCoords = coords;
+        if (mapInstance) mapInstance.setView(coords, 15);
+        actualizarEtiquetasPueblo(q);
+        cargarAnunciosCiudad(q);
+        mostrarToast(`📍 Mapa ubicado en ${q}`);
+        return;
+      }
+      // Búsqueda abierta en todo el mapa de Nicaragua (sin excluir ningún pueblo ni comarca)
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=ni&q=${encodeURIComponent(q)}&limit=1&accept-language=es`;
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (res.ok) {
+          const items = await res.json();
+          if (items && items.length > 0) {
+            const lat = parseFloat(items[0].lat);
+            const lon = parseFloat(items[0].lon);
+            userCoords = [lat, lon];
+            if (mapInstance) mapInstance.setView(userCoords, 15);
+            const nombreCorto = (items[0].display_name || q).split(',').slice(0, 2).join(',');
+            actualizarEtiquetasPueblo(nombreCorto);
+            cargarAnunciosCiudad(nombreCorto);
+            mostrarToast(`📍 Ubicado en ${nombreCorto}`);
+            return;
+          }
+        }
+      } catch (e) {}
+      actualizarEtiquetasPueblo(q);
+      mostrarToast(`📍 Zona activa: ${q}`);
+    }
+
+    function cambiarCiudadManual(ciudad) {
+      irAPuebloOBuscar(ciudad);
+    }
+
+    function centrarEnMiUbicacion() {
+      if (!navigator.geolocation) {
+        mostrarToast('Tu navegador no soporta GPS; escribe tu pueblo arriba');
+        return;
+      }
+      mostrarToast('🛰️ Ubicando tu pueblo o barrio por GPS...');
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          userCoords = [pos.coords.latitude, pos.coords.longitude];
+          if (mapInstance) mapInstance.setView(userCoords, 16);
+          detectarNombrePuebloPorGPS(userCoords[0], userCoords[1]);
+          mostrarToast('✅ Ubicación GPS lista en tu municipio');
+        },
+        () => {
+          mostrarToast('Escribe el nombre de tu pueblo o barrio en el buscador superior');
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+
+    function usarReferenciaRapida(tipo, texto) {
+      const input = document.getElementById(tipo === 'origen' ? 'inputPickup' : 'inputDest');
+      if (input) {
+        input.value = `${texto} (${currentCity})`;
+        input.focus();
+      }
+    }
+
+    // PWA Install
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredInstallPrompt = e;
@@ -498,455 +654,446 @@
         await deferredInstallPrompt.userChoice;
         deferredInstallPrompt = null;
       } else {
-        window.location.href = '/instalar.html';
+        document.getElementById('modalInstallGuide').classList.remove('hidden');
       }
     }
 
-    let configApp = {
-      ciudad: localStorage.getItem('nic_ciudad_activa') || 'Masaya',
-      tarifa_min: 15,
-      tarifa_max: 250,
-      zonas: []
-    };
-
-    function actualizarEtiquetasCiudad(ciudad) {
-      configApp.ciudad = ciudad;
-      localStorage.setItem('nic_ciudad_activa', ciudad);
-      document.querySelectorAll('.city-name-label').forEach(el => {
-        el.textContent = ciudad;
-      });
-      const sel = document.getElementById('citySelect');
-      if (sel && sel.value !== ciudad) sel.value = ciudad;
-      if (CIUDADES_NIC[ciudad]) {
-        currentCoords = CIUDADES_NIC[ciudad].slice();
-        if (mapInstance) mapInstance.setView(currentCoords, 14);
-        if (userMarker) userMarker.setLatLng(currentCoords);
-      }
-    }
-
-    async function cambiarCiudadManual(ciudad) {
-      actualizarEtiquetasCiudad(ciudad);
-      await cargarConfiguracion(ciudad);
-      await cargarAnuncios(ciudad);
-    }
-
-    function detectarUbicacionGPS() {
-      if (!navigator.geolocation) {
-        alert('Tu navegador no tiene GPS activo. Selecciona tu ciudad arriba.');
-        return;
-      }
-      navigator.geolocation.getCurrentPosition((pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        currentCoords = [lat, lng];
-        const ciudadDetectada = ciudadMasCercana(lat, lng);
-        cambiarCiudadManual(ciudadDetectada);
-        if (mapInstance) mapInstance.setView([lat, lng], 15);
-        if (userMarker) userMarker.setLatLng([lat, lng]);
-      }, () => {
-        if (mapInstance) mapInstance.setView(currentCoords, 14);
-      }, { timeout: 6000 });
-    }
-
-    async function cargarConfiguracion(ciudadParam) {
-      const c = ciudadParam || configApp.ciudad || 'Masaya';
+    async function cargarConfigCiudad(ciudad) {
       try {
-        const resp = await fetch(`/api/config?ciudad=${encodeURIComponent(c)}`);
-        if (resp.ok) {
-          const data = await resp.json();
-          configApp = data;
-          actualizarEtiquetasCiudad(data.ciudad || c);
-          const inputFare = document.getElementById('inputFare');
-          if (inputFare) {
-            inputFare.min = configApp.tarifa_min;
-            inputFare.max = configApp.tarifa_max;
-          }
-        }
+        await fetch(`/api/config?ciudad=${encodeURIComponent(ciudad || 'Todo Nicaragua')}`);
       } catch (e) {}
     }
 
-    async function cargarAnuncios(ciudadParam) {
-      const c = ciudadParam || configApp.ciudad || 'Masaya';
-      const box = document.getElementById('adsContainer');
-      if (!box) return;
+    async function cargarAnunciosCiudad(ciudad) {
+      const cont = document.getElementById('anunciosContainer');
+      if (!cont) return;
       try {
-        const resp = await fetch(`/api/anuncios?ciudad=${encodeURIComponent(c)}`);
-        const data = await resp.json();
-        if (data.anuncios && data.anuncios.length > 0) {
-          box.innerHTML = data.anuncios.map(ad => `
-            <div class="bg-white border-2 ${ad.vip ? 'border-amber-400' : 'border-slate-200'} p-4 rounded-3xl flex flex-col gap-2 shadow-md">
-              <div class="flex justify-between items-start">
-                <div>
-                  <h4 class="font-black text-sm text-slate-900">${ad.titulo}</h4>
-                  <span class="text-[10px] text-amber-600 font-bold">${ad.subtitulo}</span>
+        const res = await fetch(`/api/anuncios?ciudad=${encodeURIComponent(ciudad || 'Nicaragua')}`);
+        const data = await res.json();
+        if (data.status === 'success' && Array.isArray(data.anuncios)) {
+          cont.innerHTML = data.anuncios.map(a => `
+            <div class="bg-gradient-to-r from-${a.color}-100 via-white to-slate-50 p-3 rounded-2xl border border-${a.color}-400/50 flex items-center justify-between shadow-sm">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-${a.color}-500/20 border border-${a.color}-500/40 flex items-center justify-center text-${a.color}-700 text-lg shrink-0">
+                  <i class="fa-solid ${a.icono}"></i>
                 </div>
-                <span class="text-[9px] bg-emerald-100 text-emerald-700 border border-emerald-300 font-black px-2 py-0.5 rounded-full">${ad.badge}</span>
+                <div>
+                  <span class="text-[9px] bg-${a.color}-500 text-white font-black px-1.5 py-0.5 rounded uppercase">${a.categoria}</span>
+                  <h4 class="font-black text-xs text-slate-900 mt-0.5">${a.nombre}</h4>
+                  <p class="text-[11px] text-slate-600 font-medium">${a.descripcion}</p>
+                </div>
               </div>
-              <p class="text-xs text-slate-600 leading-snug">${ad.descripcion}</p>
-              <div class="flex justify-end pt-2 border-t border-slate-100">
-                <a href="${ad.cta_url}" target="_blank" class="bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-400 text-slate-950 font-black text-xs px-3.5 py-2 rounded-xl shadow flex items-center gap-1.5 active:scale-95">
-                  <i class="fa-brands fa-whatsapp text-sm"></i> ${ad.cta_texto}
-                </a>
-              </div>
+              <a href="https://wa.me/${a.whatsapp}?text=${encodeURIComponent(a.mensaje_wa)}" target="_blank" class="bg-${a.color}-600 hover:bg-${a.color}-500 text-white px-2.5 py-1.5 rounded-xl text-[11px] font-black shrink-0 shadow">
+                <i class="fa-brands fa-whatsapp"></i> Pedir
+              </a>
             </div>
           `).join('');
         }
       } catch (e) {}
     }
 
-    let estado = {
-      rolActual: 'pasajero',
-      tarifa: 35,
-      conductorDisponible: true,
-      viajeActivoId: null,
-      viajesDisponibles: []
-    };
-
-    // A6: Mapa con tiles CARTO Voyager (uso productivo permitido)
     function initMap() {
-      if (mapInstance) return;
-      try {
-        mapInstance = L.map('map', {
-          center: currentCoords,
-          zoom: 14,
-          zoomControl: false,
-          attributionControl: false
-        });
+      mapInstance = L.map('map', { zoomControl: false, attributionControl: false }).setView(userCoords, 14);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        subdomains: 'abcd'
+      }).addTo(mapInstance);
 
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-          maxZoom: 19
-        }).addTo(mapInstance);
+      const userIcon = L.divIcon({
+        className: 'user-pin-icon',
+        html: `<div class="w-6 h-6 rounded-full bg-emerald-600 border-2 border-white shadow-lg flex items-center justify-center text-white text-[10px] pulse-radar"><i class="fa-solid fa-person"></i></div>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+      L.marker(userCoords, { icon: userIcon }).addTo(mapInstance).bindPopup('<b>📍 Tu Ubicación Actual</b>');
 
-        const userIcon = L.divIcon({
-          className: 'user-pin-icon',
-          html: `<div style="background:#10b981; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-size:10px; border:2px solid #fff; box-shadow:0 0 10px rgba(16,185,129,0.8);"><i class="fa-solid fa-location-dot"></i></div>`,
-          iconSize: [22, 22],
-          iconAnchor: [11, 11]
-        });
-        userMarker = L.marker(currentCoords, { icon: userIcon }).addTo(mapInstance);
-      } catch (err) {}
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            userCoords = [pos.coords.latitude, pos.coords.longitude];
+            mapInstance.setView(userCoords, 15);
+            detectarNombrePuebloPorGPS(userCoords[0], userCoords[1]);
+          },
+          () => {},
+          { enableHighAccuracy: true, timeout: 6000 }
+        );
+      }
     }
 
-    // C1: Gate de registro obligatorio para entrar a Modo Conductor / Repartidor
-    function cambiarRol(rol) {
-      if (rol === 'conductor') {
-        const driverToken = localStorage.getItem('caponera_driver_token');
-        if (!driverToken) {
-          document.getElementById('driverRegisterModal').classList.remove('hidden');
-          return;
-        }
-      }
+    function mostrarToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastText').innerText = msg;
+      toast.classList.remove('opacity-0');
+      setTimeout(() => toast.classList.add('opacity-0'), 3200);
+    }
 
-      estado.rolActual = rol;
-      const viewPasajero = document.getElementById('viewPassenger');
-      const viewConductor = document.getElementById('viewDriver');
-      const btnPasajero = document.getElementById('btnRolePassenger');
-      const btnConductor = document.getElementById('btnRoleDriver');
+    // CANDADO DE CAPONERO (C1): Si no tiene token de conductor, muestra los requisitos y opción de volver a Cliente
+    function cambiarRol(rol) {
+      if (rol === 'conductor' && !driverToken) {
+        abrirModalRegistroDriver();
+        return;
+      }
+      currentRole = rol;
+      const viewP = document.getElementById('viewPassenger');
+      const viewD = document.getElementById('viewDriver');
+      const btnP = document.getElementById('btnRolePassenger');
+      const btnD = document.getElementById('btnRoleDriver');
 
       if (rol === 'pasajero') {
-        viewPasajero.classList.remove('hidden');
-        viewConductor.classList.add('hidden');
-        btnPasajero.className = 'px-3 py-1.5 rounded-xl bg-slate-950 text-amber-400 shadow-md transition-all';
-        btnConductor.className = 'px-3 py-1.5 rounded-xl text-slate-950 hover:text-white transition-all';
-        setTimeout(() => { if (mapInstance) mapInstance.invalidateSize(); }, 200);
+        viewP.classList.remove('hidden');
+        viewD.classList.add('hidden');
+        btnP.className = 'px-3 py-2 rounded-xl bg-amber-400 text-slate-950 shadow-md transition-all flex items-center gap-1';
+        btnD.className = 'px-2.5 py-2 rounded-xl text-slate-300 hover:text-white transition-all flex items-center gap-1';
+        setTimeout(() => mapInstance && mapInstance.invalidateSize(), 150);
       } else {
-        viewPasajero.classList.add('hidden');
-        viewConductor.classList.remove('hidden');
-        btnConductor.className = 'px-3 py-1.5 rounded-xl bg-slate-950 text-amber-400 shadow-md transition-all';
-        btnPasajero.className = 'px-3 py-1.5 rounded-xl text-slate-950 hover:text-white transition-all';
-        const savedName = localStorage.getItem('caponera_driver_name') || 'Caponero Verificado';
-        document.getElementById('driverHeaderName').innerText = savedName;
+        viewP.classList.add('hidden');
+        viewD.classList.remove('hidden');
+        btnD.className = 'px-2.5 py-2 rounded-xl bg-amber-400 text-slate-950 shadow-md transition-all flex items-center gap-1';
+        btnP.className = 'px-3 py-2 rounded-xl text-slate-300 hover:text-white transition-all flex items-center gap-1';
+        cargarViajesPendientes();
         cargarStatsConductor();
-        cargarFeedConductor();
       }
     }
 
-    function cerrarRegistroConductor() {
-      document.getElementById('driverRegisterModal').classList.add('hidden');
+    function abrirModalRegistroDriver() {
+      document.getElementById('modalRegistroDriver').classList.remove('hidden');
+    }
+
+    function cerrarModalDriverYVolverCliente() {
+      document.getElementById('modalRegistroDriver').classList.add('hidden');
       cambiarRol('pasajero');
     }
 
-    async function enviarRegistroConductor() {
-      const nombre = (document.getElementById('regDriverName')?.value || '').trim();
-      const cedula = (document.getElementById('regDriverCedula')?.value || '').trim();
-      const telefono = (document.getElementById('regDriverPhone')?.value || '').trim();
-      const placa = (document.getElementById('regDriverPlate')?.value || '').trim();
-      const reglas = document.getElementById('regDriverRules')?.checked;
-
-      if (!reglas) { alert('Debes aceptar las Reglas de la Red para registrarte.'); return; }
-      if (nombre.length < 3) { alert('Ingresa tu nombre completo.'); return; }
-      if (!cedula) { alert('Ingresa tu número de cédula.'); return; }
-      if (!telefono) { alert('Ingresa tu número de WhatsApp.'); return; }
-      if (!placa) { alert('Ingresa tu placa o número de unidad.'); return; }
-
-      try {
-        const resp = await fetch('/api/conductor/registro', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nombre, cedula, telefono, placa, reglas_aceptadas: true })
-        });
-        const res = await resp.json();
-        if (resp.status === 201 && res.success) {
-          localStorage.setItem('caponera_driver_token', res.driver_token);
-          localStorage.setItem('caponera_driver_id', res.conductor_id);
-          localStorage.setItem('caponera_driver_name', res.nombre);
-          document.getElementById('createdDriverToken').innerText = res.driver_token;
-          document.getElementById('driverRegisterForm').classList.add('hidden');
-          document.getElementById('driverTokenDisplay').classList.remove('hidden');
-        } else {
-          alert(res.error || 'Error al completar el registro.');
-        }
-      } catch (err) {
-        alert('Error de conexión al registrar.');
+    function guardarTokenConductorManual() {
+      const t = document.getElementById('inputExistingDriverToken').value.trim();
+      if (!t) {
+        mostrarToast('Ingresa un token válido');
+        return;
       }
-    }
-
-    function copiarTokenCreado() {
-      const tok = document.getElementById('createdDriverToken').innerText;
-      navigator.clipboard.writeText(tok).then(() => alert('¡Token copiado!')).catch(() => alert(tok));
-    }
-
-    function entrarModoConductor() {
-      document.getElementById('driverRegisterModal').classList.add('hidden');
-      document.getElementById('driverRegisterForm').classList.remove('hidden');
-      document.getElementById('driverTokenDisplay').classList.add('hidden');
+      driverToken = t;
+      localStorage.setItem('caponera_driver_token', driverToken);
+      document.getElementById('modalRegistroDriver').classList.add('hidden');
       cambiarRol('conductor');
     }
 
-    function mostrarIngresoToken() {
-      const token = prompt('Ingresa tu PIN/Token de Caponero:');
-      if (token && token.trim()) {
-        localStorage.setItem('caponera_driver_token', token.trim());
-        entrarModoConductor();
-      }
-    }
+    async function registrarConductorCaponera() {
+      const nombre = document.getElementById('regDriverNombre').value.trim();
+      const telefono = document.getElementById('regDriverTelefono').value.trim();
+      const placa = document.getElementById('regDriverPlaca').value.trim();
+      const cedula = document.getElementById('regDriverCedula').value.trim();
+      const reglas = document.getElementById('regDriverReglas').checked;
 
-    function ajustarTarifa(delta) {
-      const input = document.getElementById('inputFare');
-      let valor = parseInt(input.value) || 25;
-      valor = Math.min(configApp.tarifa_max, Math.max(configApp.tarifa_min, valor + delta));
-      input.value = valor;
-      estado.tarifa = valor;
-    }
-
-    function fijarTarifa(valor) {
-      const clamped = Math.min(configApp.tarifa_max, Math.max(configApp.tarifa_min, valor));
-      document.getElementById('inputFare').value = clamped;
-      estado.tarifa = clamped;
-    }
-
-    // C2: Validación obligatoria de teléfono sin fallback al número del dueño
-    async function solicitarViaje() {
-      const origen = document.getElementById('inputOrigin').value.trim();
-      const destino = document.getElementById('inputDestination').value.trim();
-      const paquete = (document.getElementById('inputPackageDesc')?.value || '').trim() || 'Servicio estándar';
-      const cliente = document.getElementById('inputPassengerName').value.trim();
-      const telefono = (document.getElementById('inputPassengerPhone')?.value || '').trim();
-      const tarifa = parseInt(document.getElementById('inputFare').value) || 35;
-
-      if (!origen || !destino) {
-        alert('Por favor ingresa punto de recogida y destino.');
+      if (!nombre || !telefono || !placa || !cedula) {
+        mostrarToast('Completa todos los requisitos para afiliarte');
         return;
       }
-      if (!cliente) {
-        alert('Por favor ingresa tu nombre.');
+      if (!reglas) {
+        mostrarToast('Debes aceptar las reglas de la comunidad');
         return;
       }
-      if (!telefono || telefono.length < 8) {
-        alert('Por favor ingresa tu número de WhatsApp o teléfono válido (8 dígitos) para coordinar la recogida.');
-        return;
-      }
-      if (tarifa < configApp.tarifa_min || tarifa > configApp.tarifa_max) {
-        alert(`La tarifa debe estar entre C$ ${configApp.tarifa_min} y C$ ${configApp.tarifa_max}`);
-        return;
-      }
-
-      const card = document.getElementById('activeTripCard');
-      const radar = document.getElementById('searchRadar');
-      const details = document.getElementById('driverDetails');
-      const badge = document.getElementById('tripStatusBadge');
-
-      card.classList.remove('hidden');
-      radar.classList.remove('hidden');
-      details.classList.add('hidden');
-      badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-950 animate-ping"></span> BUSCANDO CAPONERA`;
 
       try {
-        const resp = await fetch('/api/viajes/solicitar', {
+        const res = await fetch('/api/conductor/registro', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nombre, telefono, placa, cedula, reglas_aceptadas: true })
+        });
+        const data = await res.json();
+        if (data.status === 'success' && data.driver_token) {
+          driverToken = data.driver_token;
+          localStorage.setItem('caponera_driver_token', driverToken);
+          document.getElementById('driverNameInput').value = nombre;
+          document.getElementById('driverPhoneInput').value = telefono;
+          document.getElementById('modalRegistroDriver').classList.add('hidden');
+          mostrarToast('✅ ¡Afiliación aprobada! Radar Caponero activado');
+          cambiarRol('conductor');
+        } else {
+          mostrarToast(data.message || 'No se pudo completar el registro');
+        }
+      } catch (e) {
+        mostrarToast('Error de red al registrar conductor');
+      }
+    }
+
+    function seleccionarPrecio(precio, btnElement) {
+      selectedPrice = precio;
+      document.getElementById('inputCustomPrice').value = precio;
+      document.querySelectorAll('.btn-precio').forEach(b => {
+        b.className = 'btn-precio py-2 rounded-xl border border-slate-700 bg-slate-800 text-white font-black text-xs hover:border-amber-400 transition-all flex flex-col items-center';
+      });
+      btnElement.className = 'btn-precio py-2 rounded-xl border-2 border-amber-400 bg-amber-400 text-slate-950 font-black text-xs shadow-md transition-all flex flex-col items-center';
+    }
+
+    function actualizarPrecioManual(val) {
+      const num = parseInt(val);
+      if (!isNaN(num) && num >= 20) selectedPrice = num;
+    }
+
+    function limpiarInput(id) {
+      const el = document.getElementById(id);
+      el.value = '';
+      el.focus();
+    }
+
+    async function solicitarCaponera() {
+      const origen = document.getElementById('inputPickup').value.trim();
+      const destino = document.getElementById('inputDest').value.trim();
+      const nombre = document.getElementById('inputPassengerName').value.trim() || 'Pasajero';
+      const telefono = document.getElementById('inputPassengerPhone').value.trim();
+
+      if (!origen || !destino) {
+        mostrarToast('⚠️ Escribe dónde te recogen y a dónde vas');
+        return;
+      }
+      const digits = telefono.replace(/\D/g, '');
+      if (digits.length < 8) {
+        mostrarToast('⚠️ Ingresa tu número de WhatsApp (8 dígitos) para que el caponero te avise');
+        document.getElementById('inputPassengerPhone').focus();
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/viajes/solicitar', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            pasajero_nombre: cliente,
+            cliente_nombre: nombre,
             cliente_telefono: telefono,
-            origen: origen,
-            destino: destino,
-            paquete_desc: paquete,
-            tarifa: tarifa,
-            lat: currentCoords[0],
-            lng: currentCoords[1]
+            origen_texto: `${origen} [${currentCity}]`,
+            destino_texto: destino,
+            precio_ofertado: selectedPrice,
+            ciudad: currentCity,
+            origen_lat: userCoords[0],
+            origen_lng: userCoords[1]
           })
         });
-        const resData = await resp.json();
-        if (resData.success) {
-          estado.viajeActivoId = resData.viaje_id;
-          if (resData.session_token) {
-            localStorage.setItem(`caponera_token_${estado.viajeActivoId}`, resData.session_token);
-            localStorage.setItem('caponera_active_trip_token', resData.session_token);
-          }
+        const data = await res.json();
+        if (data.status === 'success') {
+          activeRideId = data.viaje_id;
+          activeSessionToken = data.session_token || '';
+          localStorage.setItem('caponera_active_ride_id', activeRideId);
+          localStorage.setItem('caponera_session_token', activeSessionToken);
+          mostrarEstadoViaje(data.viaje);
+          mostrarToast('🛺 ¡Solicitud enviada a los caponeros de tu zona!');
         } else {
-          alert(resData.error || 'Error al registrar la solicitud');
-          card.classList.add('hidden');
-          return;
+          mostrarToast(data.message || 'Error al solicitar viaje');
         }
       } catch (e) {
-        alert('Error de conexión con el servidor.');
-        card.classList.add('hidden');
+        mostrarToast('Error de conexión con el servidor');
+      }
+    }
+
+    function mostrarEstadoViaje(viaje) {
+      const modal = document.getElementById('rideStatusModal');
+      const btnReq = document.getElementById('btnRequestRide');
+      const cardDriver = document.getElementById('driverAssignedCard');
+      const btnComp = document.getElementById('btnCompletePassenger');
+
+      modal.classList.remove('hidden');
+      btnReq.classList.add('hidden');
+
+      if (viaje.estado === 'pendiente') {
+        document.getElementById('statusTitle').innerText = `Buscando Caponera (Oferta: C$${viaje.precio_ofertado})...`;
+        document.getElementById('statusDesc').innerText = `Ruta: ${viaje.origen_texto} ➔ ${viaje.destino_texto}`;
+        cardDriver.classList.add('hidden');
+        btnComp.classList.add('hidden');
+      } else if (viaje.estado === 'aceptado' || viaje.estado === 'en_camino') {
+        document.getElementById('statusTitle').innerText = '¡Caponero en camino por ti!';
+        document.getElementById('statusDesc').innerText = `Tarifa acordada: C$${viaje.precio_ofertado} (Pagar en efectivo al bajar)`;
+        document.getElementById('driverName').innerText = viaje.conductor_nombre || 'Caponero Verificado';
+        document.getElementById('driverUnit').innerText = `Ruta hacia: ${viaje.destino_texto}`;
+        const msgWa = encodeURIComponent(`Hola ${viaje.conductor_nombre}, soy ${viaje.cliente_nombre}. Te espero en ${viaje.origen_texto} (Viaje #${viaje.id} por C$${viaje.precio_ofertado}).`);
+        document.getElementById('btnWhatsappDriver').href = `https://wa.me/${viaje.conductor_telefono || ''}?text=${msgWa}`;
+        cardDriver.classList.remove('hidden');
+        btnComp.classList.remove('hidden');
+      } else if (viaje.estado === 'completado' || viaje.estado === 'cancelado') {
+        localStorage.removeItem('caponera_active_ride_id');
+        localStorage.removeItem('caponera_session_token');
+        activeRideId = null;
+        activeSessionToken = null;
+        modal.classList.add('hidden');
+        btnReq.classList.remove('hidden');
       }
     }
 
     async function cancelarViaje() {
-      if (estado.viajeActivoId) {
-        const token = localStorage.getItem(`caponera_token_${estado.viajeActivoId}`) || localStorage.getItem('caponera_active_trip_token') || '';
-        try {
-          await fetch(`/api/viajes/${estado.viajeActivoId}/cancelar`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Session-Token': token },
-            body: JSON.stringify({ viaje_id: estado.viajeActivoId, session_token: token })
-          });
-        } catch(e) {}
-      }
-      document.getElementById('activeTripCard').classList.add('hidden');
+      if (!activeRideId) return;
+      await fetch(`/api/viajes/${activeRideId}/cancelar`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Token': activeSessionToken || ''
+        },
+        body: JSON.stringify({ session_token: activeSessionToken || '' })
+      });
+      localStorage.removeItem('caponera_active_ride_id');
+      localStorage.removeItem('caponera_session_token');
+      activeRideId = null;
+      activeSessionToken = null;
+      document.getElementById('rideStatusModal').classList.add('hidden');
+      document.getElementById('btnRequestRide').classList.remove('hidden');
+      mostrarToast('Solicitud cancelada');
     }
 
-    function simularFinalizar() {
-      alert('¡Servicio completado con éxito!');
-      document.getElementById('activeTripCard').classList.add('hidden');
+    async function completarViajeActual() {
+      if (!activeRideId) return;
+      await fetch(`/api/viajes/${activeRideId}/completar`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Token': activeSessionToken || ''
+        },
+        body: JSON.stringify({ session_token: activeSessionToken || '' })
+      });
+      localStorage.removeItem('caponera_active_ride_id');
+      localStorage.removeItem('caponera_session_token');
+      activeRideId = null;
+      activeSessionToken = null;
+      document.getElementById('rideStatusModal').classList.add('hidden');
+      document.getElementById('btnRequestRide').classList.remove('hidden');
+      mostrarToast('🎉 ¡Gracias por viajar con Caponera App!');
     }
 
-    function toggleDisponibilidad() {
-      estado.conductorDisponible = !estado.conductorDisponible;
-      const btn = document.getElementById('btnToggleDriverStatus');
-      if (estado.conductorDisponible) {
-        btn.className = 'px-3.5 py-1.5 rounded-full text-xs font-black bg-emerald-500 text-slate-950 flex items-center gap-1.5 shadow-md active:scale-95 transition';
-        btn.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-950"></span> DISPONIBLE`;
-      } else {
-        btn.className = 'px-3.5 py-1.5 rounded-full text-xs font-black bg-slate-700 text-slate-300 flex items-center gap-1.5 shadow-md active:scale-95 transition';
-        btn.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-500"></span> FUERA DE SERVICIO`;
-      }
-    }
-
-    // N1: Cargar estadísticas reales del conductor
     async function cargarStatsConductor() {
-      const driverId = localStorage.getItem('caponera_driver_id') || '';
+      if (!driverToken) return;
       try {
-        const resp = await fetch(`/api/conductor/stats?conductor_id=${encodeURIComponent(driverId)}`);
-        if (resp.ok) {
-          const st = await resp.json();
-          document.getElementById('driverEarnedToday').innerText = `C$ ${st.ganado_hoy || 0}`;
-          document.getElementById('driverTripsToday').innerText = `${st.viajes_hoy || 0} hoy`;
+        const res = await fetch('/api/conductor/stats', {
+          headers: { 'X-Driver-Token': driverToken }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === 'success') {
+            document.getElementById('driverEarningsToday').innerText = `C$ ${data.ganancias_hoy || 0}`;
+            document.getElementById('driverTripsToday').innerText = `${data.viajes_hoy || 0}`;
+          }
         }
       } catch (e) {}
     }
 
-    async function cargarFeedConductor() {
-      const feed = document.getElementById('driverFeed');
-      const counter = document.getElementById('requestsCount');
-      const token = localStorage.getItem('caponera_driver_token') || '';
-      const driverId = localStorage.getItem('caponera_driver_id') || '';
-
-      const headers = {};
-      if (token) headers['X-Driver-Token'] = token;
-
+    async function cargarViajesPendientes() {
+      if (!driverOnline || !driverToken) return;
       try {
-        let url = `/api/conductor/viajes_pendientes?lat=${currentCoords[0]}&lng=${currentCoords[1]}`;
-        if (driverId) url += `&conductor_id=${driverId}`;
-        const resp = await fetch(url, { headers });
-        if (resp.status === 403) {
-          const errData = await resp.json().catch(() => ({}));
-          feed.innerHTML = `
-            <div class="p-6 text-center text-rose-700 text-xs border border-rose-300 bg-rose-50 rounded-3xl">
-              <i class="fa-solid fa-ban text-2xl mb-2 block"></i>
-              <strong>ACCESO RESTRINGIDO</strong><br>
-              ${errData.error || 'Regístrate o ingresa un PIN/Token válido'}.
-              <button onclick="localStorage.removeItem('caponera_driver_token'); cambiarRol('conductor');" class="mt-3 block mx-auto px-4 py-2 rounded-xl bg-slate-900 text-white font-bold">Registrar / Cambiar Token</button>
-            </div>`;
-          counter.innerText = 'Bloqueado';
+        const url = `/api/conductor/viajes_pendientes?lat=${userCoords[0]}&lng=${userCoords[1]}`;
+        const res = await fetch(url, {
+          headers: { 'X-Driver-Token': driverToken }
+        });
+        if (res.status === 401 || res.status === 403) {
+          driverToken = '';
+          localStorage.removeItem('caponera_driver_token');
+          abrirModalRegistroDriver();
           return;
         }
-        const data = await resp.json();
-        estado.viajesDisponibles = data.carreras || data.viajes || [];
-      } catch(e) {}
+        const data = await res.json();
+        const container = document.getElementById('driverRequestsList');
 
-      feed.innerHTML = '';
-      counter.innerText = `${estado.viajesDisponibles.length} pedidos`;
+        if (!data.viajes || data.viajes.length === 0) {
+          container.innerHTML = `
+            <div class="bg-white border border-slate-300 rounded-2xl p-6 text-center text-slate-600 text-xs font-bold shadow-sm">
+              <i class="fa-solid fa-satellite-dish text-2xl mb-2 text-amber-500"></i>
+              <p>Esperando solicitudes de pasajeros en tu zona...</p>
+            </div>`;
+          return;
+        }
 
-      if (estado.viajesDisponibles.length === 0) {
-        feed.innerHTML = `
-          <div class="p-6 text-center text-slate-500 text-xs border border-dashed border-slate-300 rounded-3xl bg-white">
-            No hay solicitudes pendientes en este momento en <span class="city-name-label">${configApp.ciudad}</span>.
-          </div>`;
-        return;
-      }
-
-      estado.viajesDisponibles.forEach((v, index) => {
-        const item = document.createElement('div');
-        item.className = 'bg-white border border-slate-200 p-3.5 rounded-3xl flex flex-col gap-2.5 shadow-md';
-        item.innerHTML = `
-          <div class="flex justify-between items-start">
-            <span class="text-xs font-black text-slate-900">${v.pasajero_nombre || v.pasajero || 'Cliente'}</span>
-            <span class="text-sm font-black text-emerald-600">C$ ${v.tarifa}</span>
-          </div>
-          <div class="text-xs text-slate-600 flex flex-col gap-1">
-            <div><i class="fa-solid fa-circle-dot text-[10px] text-emerald-600 mr-1"></i> ${v.origen}</div>
-            <div><i class="fa-solid fa-location-dot text-[10px] text-rose-600 mr-1"></i> ${v.destino}</div>
-          </div>
-          <div class="flex gap-2 pt-2 border-t border-slate-100">
-            <button onclick="aceptarViajeConductor(${index})" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2 rounded-xl text-xs transition shadow active:scale-95">
-              Aceptar Servicio
+        container.innerHTML = data.viajes.map(v => `
+          <div class="bg-white border-2 border-slate-300 rounded-2xl p-4 space-y-3 shadow-md animate-fade-in">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="text-[10px] bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full font-black uppercase">Pasajero: ${v.cliente_nombre}</span>
+                <h4 class="font-black text-sm text-slate-900 mt-1"><i class="fa-solid fa-circle-dot text-emerald-600 mr-1"></i> ${v.origen_texto}</h4>
+                <p class="text-xs text-slate-700 font-bold mt-0.5"><i class="fa-solid fa-location-dot text-rose-600 mr-1"></i> Hacia: ${v.destino_texto}</p>
+              </div>
+              <div class="text-right">
+                <span class="text-lg font-black text-emerald-700">C$${v.precio_ofertado}</span>
+                <p class="text-[10px] text-slate-500 font-bold">Efectivo</p>
+              </div>
+            </div>
+            <button onclick="aceptarViajeConductor(${v.id})" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-2.5 rounded-xl text-xs shadow-lg flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-check-double"></i> ACEPTAR CARRERA (C$${v.precio_ofertado})
             </button>
           </div>
-        `;
-        feed.appendChild(item);
-      });
+        `).join('');
+      } catch (e) {}
     }
 
-    async function aceptarViajeConductor(index) {
-      const v = estado.viajesDisponibles[index];
-      const token = localStorage.getItem('caponera_driver_token') || '';
-      const driverId = parseInt(localStorage.getItem('caponera_driver_id')) || null;
-      if (v && v.id) {
-        try {
-          const headers = { 'Content-Type': 'application/json' };
-          if (token) headers['X-Driver-Token'] = token;
-          const resp = await fetch(`/api/viajes/${v.id}/aceptar`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ conductor_id: driverId })
-          });
-          const data = await resp.json().catch(() => ({}));
-          if (!resp.ok) {
-            alert(data.error || 'No se pudo aceptar el servicio.');
-            return;
-          }
-          alert(`¡Servicio aceptado! Dirígete a: ${v.origen}. Tarifa: C$ ${v.tarifa}`);
-          cargarStatsConductor();
-          cargarFeedConductor();
-        } catch(e) {}
+    async function aceptarViajeConductor(viajeId) {
+      const nombre = document.getElementById('driverNameInput').value.trim() || 'Caponero';
+      const telefono = document.getElementById('driverPhoneInput').value.trim();
+
+      const res = await fetch(`/api/viajes/${viajeId}/aceptar`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Driver-Token': driverToken
+        },
+        body: JSON.stringify({ conductor_nombre: nombre, conductor_telefono: telefono })
+      });
+      if (res.status === 401 || res.status === 403) {
+        driverToken = '';
+        localStorage.removeItem('caponera_driver_token');
+        abrirModalRegistroDriver();
+        return;
+      }
+      const data = await res.json();
+      if (data.status === 'success') {
+        mostrarToast('🛺 ¡Carrera aceptada! Contacta al pasajero por WhatsApp');
+        cargarViajesPendientes();
+        cargarStatsConductor();
+        if (data.viaje && data.viaje.cliente_telefono) {
+          const msg = encodeURIComponent(`Hola ${data.viaje.cliente_nombre}, soy tu caponero (${nombre}). Ya voy en camino por ti hacia ${data.viaje.origen_texto}.`);
+          window.open(`https://wa.me/${data.viaje.cliente_telefono}?text=${msg}`, '_blank');
+        }
+      } else {
+        mostrarToast(data.message || 'Otro caponero ya tomó este viaje');
+        cargarViajesPendientes();
       }
     }
 
-    function mostrarTarifario() { document.getElementById('fareModal').classList.remove('hidden'); }
-    function ocultarTarifario() { document.getElementById('fareModal').classList.add('hidden'); }
-    function mostrarPrivacidad() { document.getElementById('privacyModal').classList.remove('hidden'); }
-    function ocultarPrivacidad() { document.getElementById('privacyModal').classList.add('hidden'); }
+    function toggleDriverOnline() {
+      driverOnline = !driverOnline;
+      const btn = document.getElementById('btnToggleShift');
+      const dot = document.getElementById('driverStatusDot');
+      if (driverOnline) {
+        btn.innerText = 'EN LÍNEA';
+        btn.className = 'bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-black border border-emerald-700 shadow';
+        dot.className = 'w-4 h-4 rounded-full bg-emerald-600 animate-ping';
+        cargarViajesPendientes();
+      } else {
+        btn.innerText = 'PAUSADO';
+        btn.className = 'bg-slate-200 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-black border border-slate-400';
+        dot.className = 'w-4 h-4 rounded-full bg-slate-400';
+      }
+    }
+
+    setInterval(async () => {
+      if (activeRideId) {
+        try {
+          const res = await fetch(`/api/viajes/${activeRideId}/estado`, {
+            headers: { 'X-Session-Token': activeSessionToken || '' }
+          });
+          const data = await res.json();
+          if (data.status === 'success') mostrarEstadoViaje(data.viaje);
+        } catch (e) {}
+      }
+      if (currentRole === 'conductor' && driverOnline && driverToken) {
+        cargarViajesPendientes();
+      }
+    }, 3500);
 
     window.addEventListener('DOMContentLoaded', () => {
+      inicializarBuscadorPueblos();
       initMap();
-      cargarConfiguracion(configApp.ciudad);
-      cargarAnuncios(configApp.ciudad);
-      detectarUbicacionGPS();
+      cargarAnunciosCiudad(currentCity);
+      if (activeRideId) {
+        fetch(`/api/viajes/${activeRideId}/estado`, {
+          headers: { 'X-Session-Token': activeSessionToken || '' }
+        })
+          .then(r => r.json())
+          .then(d => { if (d.status === 'success') mostrarEstadoViaje(d.viaje); })
+          .catch(() => {});
+      }
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(() => {});
+        navigator.serviceWorker.register('/sw.js').then(reg => reg.update()).catch(() => {});
       }
     });
   </script>
