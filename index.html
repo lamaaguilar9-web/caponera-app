@@ -665,9 +665,8 @@
 
     function initMap() {
       mapInstance = L.map('map', { zoomControl: false, attributionControl: false }).setView(userCoords, 14);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19,
-        subdomains: 'abcd'
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
       }).addTo(mapInstance);
 
       const userIcon = L.divIcon({
