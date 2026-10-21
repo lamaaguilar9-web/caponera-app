@@ -11,7 +11,7 @@ import secrets
 # Configurar entorno de prueba antes de importar server
 os.environ["CAPONERA_ADMIN_KEY"] = "sentinel_test_admin_key_2026"
 os.environ["CAPONERA_SEED_DEMO"] = "1"
-os.environ["CAPONERA_TARIFA_MIN"] = "15.0"
+os.environ["CAPONERA_TARIFA_MIN"] = "20.0"
 os.environ["CAPONERA_TARIFA_MAX"] = "250.0"
 os.environ["CAPONERA_VIAJE_TTL_SEC"] = "2"
 
@@ -270,12 +270,24 @@ def run_all_tests():
     assert res_cfg.status_code == 200
     cfg = res_cfg.get_json()
     assert cfg["ciudad"] == "Masaya"
-    assert cfg["tarifa_min"] == 15.0
+    assert cfg["tarifa_min"] == 20.0
     assert cfg["tarifa_max"] == 250.0
 
-    # Tarifa menor al mínimo (C$ 10 < 15) -> 400
+    # Tarifa 15 rechazada (piso 20) -> 400
+    res_low15 = client.post("/api/viajes/crear", json={"tarifa": 15.0, "cliente_telefono": "88886666"}, environ_base={"REMOTE_ADDR": "192.168.1.179"})
+    assert res_low15.status_code == 400, f"Esperado 400 por tarifa 15, obtenido {res_low15.status_code}"
+
+    # Tarifa menor al mínimo (C$ 10 < 20) -> 400
     res_low = client.post("/api/viajes/crear", json={"tarifa": 10.0, "cliente_telefono": "88886666"}, environ_base={"REMOTE_ADDR": "192.168.1.180"})
     assert res_low.status_code == 400, f"Esperado 400 por tarifa baja, obtenido {res_low.status_code}"
+
+    # Tarifa 20 aceptada (piso exacto) -> 201
+    res_20 = client.post("/api/viajes/crear", json={"tarifa": 20.0, "cliente_telefono": "88886666", "origen_texto": "Centro", "destino_texto": "Mercado"}, environ_base={"REMOTE_ADDR": "192.168.1.182"})
+    assert res_20.status_code == 200, f"Esperado 201 por tarifa 20, obtenido {res_20.status_code}"
+
+    # Tarifa 25 aceptada (el 5 manual) -> 201
+    res_25 = client.post("/api/viajes/crear", json={"tarifa": 25.0, "cliente_telefono": "88886666", "origen_texto": "Centro", "destino_texto": "Parque"}, environ_base={"REMOTE_ADDR": "192.168.1.183"})
+    assert res_25.status_code == 200, f"Esperado 201 por tarifa 25, obtenido {res_25.status_code}"
 
     # Tarifa mayor al máximo (C$ 300 > 250) -> 400
     res_high = client.post("/api/viajes/crear", json={"tarifa": 300.0, "cliente_telefono": "88886666"}, environ_base={"REMOTE_ADDR": "192.168.1.181"})

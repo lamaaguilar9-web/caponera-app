@@ -474,7 +474,7 @@ def get_config():
         ciudad = "Masaya"
     coords = CIUDADES_NIC_COORDS.get(ciudad, [12.1364, -86.2514])
     try:
-        tarifa_min = float(os.getenv("CAPONERA_TARIFA_MIN", "15.0"))
+        tarifa_min = float(os.getenv("CAPONERA_TARIFA_MIN", "20.0"))
     except ValueError:
         tarifa_min = 15.0
     try:
@@ -686,7 +686,7 @@ def solicitar_viaje():
         return jsonify({"success": False, "error": "Parámetros inválidos"}), 400
 
     try:
-        tarifa_min = float(os.getenv("CAPONERA_TARIFA_MIN", "15.0"))
+        tarifa_min = float(os.getenv("CAPONERA_TARIFA_MIN", "20.0"))
     except ValueError:
         tarifa_min = 15.0
     try:
