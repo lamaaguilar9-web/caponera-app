@@ -656,7 +656,7 @@ def solicitar_viaje():
 
     data = request.get_json(silent=True) or {}
     pasajero = str(data.get("pasajero_nombre", "Pasajero Express"))[:100]
-    cliente_telefono = str(data.get("cliente_telefono") or data.get("telefono") or data.get("whatsapp") or "").strip()
+    cliente_telefono = re.sub(r"[\s\-()]", "", str(data.get("cliente_telefono") or data.get("telefono") or data.get("whatsapp") or "").strip())
     origen = str(data.get("origen", "Punto Actual"))[:150]
     destino = str(data.get("destino", "Destino Indicado"))[:150]
     # Token criptográfico de sesión para autorización de cancelación (Cero IDOR)

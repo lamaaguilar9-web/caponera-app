@@ -828,26 +828,43 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            pasajero_nombre: nombre,
             cliente_nombre: nombre,
-            cliente_telefono: telefono,
+            cliente_telefono: telefono.replace(/[\s\-()]/g, ''),
+            origen: `${origen} [${currentCity}]`,
             origen_texto: `${origen} [${currentCity}]`,
+            destino: destino,
             destino_texto: destino,
+            tarifa: selectedPrice,
             precio_ofertado: selectedPrice,
             ciudad: currentCity,
+            lat_origen: userCoords[0],
+            lng_origen: userCoords[1],
             origen_lat: userCoords[0],
             origen_lng: userCoords[1]
           })
         });
         const data = await res.json();
-        if (data.status === 'success') {
+        if (data.success || data.status === 'success') {
+          const vObj = data.viaje || {
+            id: data.viaje_id,
+            estado: data.estado || 'buscando',
+            tarifa: selectedPrice,
+            precio_ofertado: selectedPrice,
+            tarifa: selectedPrice,
+            origen_texto: origen,
+            destino_texto: destino,
+            cliente_nombre: nombre,
+            descripcion_paquete: (typeof descripcion !== 'undefined' ? descripcion : '')
+          };
           activeRideId = data.viaje_id;
           activeSessionToken = data.session_token || '';
           localStorage.setItem('caponera_active_ride_id', activeRideId);
           localStorage.setItem('caponera_session_token', activeSessionToken);
-          mostrarEstadoViaje(data.viaje);
+          mostrarEstadoViaje(vObj);
           mostrarToast('🛺 ¡Solicitud enviada a los caponeros de tu zona!');
         } else {
-          mostrarToast(data.message || 'Error al solicitar viaje');
+          mostrarToast(data.error || data.message || 'Error al solicitar viaje');
         }
       } catch (e) {
         mostrarToast('Error de conexión con el servidor');
@@ -855,6 +872,13 @@
     }
 
     function mostrarEstadoViaje(viaje) {
+      if (!viaje) return;
+      viaje.precio_ofertado = viaje.precio_ofertado || viaje.tarifa || selectedPrice;
+      viaje.origen_texto = viaje.origen_texto || viaje.origen || '';
+      viaje.destino_texto = viaje.destino_texto || viaje.destino || '';
+      viaje.cliente_nombre = viaje.cliente_nombre || viaje.pasajero_nombre || 'Cliente';
+      viaje.descripcion_paquete = viaje.descripcion_paquete || viaje.paquete_descripcion || '';
+
       const modal = document.getElementById('rideStatusModal');
       const btnReq = document.getElementById('btnRequestRide');
       const cardDriver = document.getElementById('driverAssignedCard');
@@ -863,7 +887,7 @@
       modal.classList.remove('hidden');
       btnReq.classList.add('hidden');
 
-      if (viaje.estado === 'pendiente') {
+      if (viaje.estado === 'pendiente' || viaje.estado === 'buscando') {
         document.getElementById('statusTitle').innerText = `Buscando Caponera (Oferta: C$${viaje.precio_ofertado})...`;
         document.getElementById('statusDesc').innerText = `Ruta: ${viaje.origen_texto} ➔ ${viaje.destino_texto}`;
         cardDriver.classList.add('hidden');
@@ -895,7 +919,7 @@
           'Content-Type': 'application/json',
           'X-Session-Token': activeSessionToken || ''
         },
-        body: JSON.stringify({ session_token: activeSessionToken || '' })
+        body: JSON.stringify({ estado: 'completado', session_token: activeSessionToken || '' })
       });
       localStorage.removeItem('caponera_active_ride_id');
       localStorage.removeItem('caponera_session_token');
@@ -908,13 +932,13 @@
 
     async function completarViajeActual() {
       if (!activeRideId) return;
-      await fetch(`/api/viajes/${activeRideId}/completar`, {
+      await fetch(`/api/viajes/${activeRideId}/actualizar-estado`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Session-Token': activeSessionToken || ''
         },
-        body: JSON.stringify({ session_token: activeSessionToken || '' })
+        body: JSON.stringify({ estado: 'completado', session_token: activeSessionToken || '' })
       });
       localStorage.removeItem('caponera_active_ride_id');
       localStorage.removeItem('caponera_session_token');
@@ -970,17 +994,17 @@
           <div class="bg-white border-2 border-slate-300 rounded-2xl p-4 space-y-3 shadow-md animate-fade-in">
             <div class="flex justify-between items-start">
               <div>
-                <span class="text-[10px] bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full font-black uppercase">Pasajero: ${v.cliente_nombre}</span>
-                <h4 class="font-black text-sm text-slate-900 mt-1"><i class="fa-solid fa-circle-dot text-emerald-600 mr-1"></i> ${v.origen_texto}</h4>
-                <p class="text-xs text-slate-700 font-bold mt-0.5"><i class="fa-solid fa-location-dot text-rose-600 mr-1"></i> Hacia: ${v.destino_texto}</p>
+                <span class="text-[10px] bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full font-black uppercase">Pasajero: ${v.cliente_nombre || v.pasajero || 'Cliente'}</span>
+                <h4 class="font-black text-sm text-slate-900 mt-1"><i class="fa-solid fa-circle-dot text-emerald-600 mr-1"></i> ${v.origen_texto || v.origen || ''}</h4>
+                <p class="text-xs text-slate-700 font-bold mt-0.5"><i class="fa-solid fa-location-dot text-rose-600 mr-1"></i> Hacia: ${v.destino_texto || v.destino || ''}</p>
               </div>
               <div class="text-right">
-                <span class="text-lg font-black text-emerald-700">C$${v.precio_ofertado}</span>
+                <span class="text-lg font-black text-emerald-700">C$${v.precio_ofertado || v.tarifa || 40}</span>
                 <p class="text-[10px] text-slate-500 font-bold">Efectivo</p>
               </div>
             </div>
             <button onclick="aceptarViajeConductor(${v.id})" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-2.5 rounded-xl text-xs shadow-lg flex items-center justify-center gap-1.5">
-              <i class="fa-solid fa-check-double"></i> ACEPTAR CARRERA (C$${v.precio_ofertado})
+              <i class="fa-solid fa-check-double"></i> ACEPTAR CARRERA (C$${v.precio_ofertado || v.tarifa || 40})
             </button>
           </div>
         `).join('');
@@ -1006,7 +1030,7 @@
         return;
       }
       const data = await res.json();
-      if (data.status === 'success') {
+      if (data.success || data.status === 'success') {
         mostrarToast('🛺 ¡Carrera aceptada! Contacta al pasajero por WhatsApp');
         cargarViajesPendientes();
         cargarStatsConductor();
@@ -1043,7 +1067,7 @@
             headers: { 'X-Session-Token': activeSessionToken || '' }
           });
           const data = await res.json();
-          if (data.status === 'success') mostrarEstadoViaje(data.viaje);
+          if (data.success || data.status === 'success') mostrarEstadoViaje(data.viaje || data);
         } catch (e) {}
       }
       if (currentRole === 'conductor' && driverOnline && driverToken) {
@@ -1060,7 +1084,7 @@
           headers: { 'X-Session-Token': activeSessionToken || '' }
         })
           .then(r => r.json())
-          .then(d => { if (d.status === 'success') mostrarEstadoViaje(d.viaje); })
+          .then(d => { if (d.success || d.status === 'success') mostrarEstadoViaje(d.viaje || d); })
           .catch(() => {});
       }
       if ('serviceWorker' in navigator) {
