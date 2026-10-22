@@ -1379,13 +1379,57 @@ Caponera/Unidad: {{ conductor.unidad if conductor else 'N/A' }}
 </html>
 """
 
-def make_admin_session_token(admin_key: str) -> str:
-    return hmac.new(b"sentinel_admin_session_salt_2026", admin_key.encode("utf-8"), hashlib.sha256).hexdigest()
+# =========================================================
+# GESTIÓN DE SESIONES Y SEGURIDAD ADMINISTRATIVA (F1 - F5)
+# =========================================================
+ADMIN_SESSIONS = {}           # {session_token: expire_timestamp}
+ADMIN_SESSION_TTL = 86400     # 24 Horas de expiración (F4)
+LOGIN_ATTEMPTS = defaultdict(list) # {ip: [timestamps]} (F5)
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_WINDOW_SEC = 60
+
+def get_admin_key() -> str:
+    # F1: Cero secretos por defecto en el código. Fail-closed.
+    return os.getenv("CAPONERA_ADMIN_KEY", "").strip()
+
+def cleanup_admin_sessions():
+    now = time.time()
+    expired = [tok for tok, exp in list(ADMIN_SESSIONS.items()) if exp <= now]
+    for tok in expired:
+        ADMIN_SESSIONS.pop(tok, None)
+
+def create_admin_session() -> str:
+    # F2: Token aleatorio criptográfico (secrets.token_hex(32))
+    cleanup_admin_sessions()
+    token = secrets.token_hex(32)
+    ADMIN_SESSIONS[token] = time.time() + ADMIN_SESSION_TTL
+    return token
+
+def revoke_admin_session(token: str):
+    if token:
+        ADMIN_SESSIONS.pop(token, None)
+
+def check_login_rate_limit(ip: str) -> bool:
+    # F5: Rate Limiter estricto (5 intentos/minuto/IP)
+    now = time.time()
+    LOGIN_ATTEMPTS[ip] = [t for t in LOGIN_ATTEMPTS[ip] if now - t < LOGIN_WINDOW_SEC]
+    if len(LOGIN_ATTEMPTS[ip]) >= LOGIN_MAX_ATTEMPTS:
+        return False
+    LOGIN_ATTEMPTS[ip].append(now)
+    return True
 
 def is_admin_authenticated(admin_key: str):
+    if not admin_key:
+        return False, ""
+    cleanup_admin_sessions()
+    # 1. Sesión en cookie HttpOnly (F2, F3)
     cookie_token = request.cookies.get("admin_session")
-    if cookie_token and hmac.compare_digest(cookie_token, make_admin_session_token(admin_key)):
-        return True, ""
+    if cookie_token and cookie_token in ADMIN_SESSIONS:
+        if ADMIN_SESSIONS[cookie_token] > time.time():
+            return True, ""
+        else:
+            ADMIN_SESSIONS.pop(cookie_token, None)
+    # 2. Compatibilidad con suites de pruebas (F6: query param o cabecera)
     provided_key = (
         request.args.get("key")
         or request.headers.get("X-Admin-Key")
@@ -1397,21 +1441,33 @@ def is_admin_authenticated(admin_key: str):
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
-    admin_key = os.getenv("CAPONERA_ADMIN_KEY", "sentinel2026").strip()
+    admin_key = get_admin_key()
+    if not admin_key:
+        return jsonify({"success": False, "error": "Panel administrativo no configurado en este servidor"}), 503
+
+    client_ip = request.headers.get("X-Forwarded-For", request.remote_addr or "127.0.0.1").split(",")[0].strip()
+
     if request.method == "POST":
+        if not check_login_rate_limit(client_ip):
+            return render_template_string(LOGIN_HTML, app_title="Caponera App · Panel de Control", error="Demasiados intentos fallidos. Por favor espere 1 minuto."), 429
+
         password = (request.form.get("password") or request.form.get("key") or "").strip()
         if not password or not hmac.compare_digest(password, admin_key):
             return render_template_string(LOGIN_HTML, app_title="Caponera App · Panel de Control", error="Contraseña incorrecta. Acceso denegado."), 401
+
+        session_token = create_admin_session()
         resp = make_response(redirect("/admin"))
         resp.set_cookie(
             "admin_session",
-            make_admin_session_token(admin_key),
+            session_token,
             httponly=True,
+            secure=True,
             samesite="Lax",
-            max_age=86400 * 30,
+            max_age=86400,
             path="/"
         )
         return resp
+
     auth_ok, _ = is_admin_authenticated(admin_key)
     if auth_ok:
         return redirect("/admin")
@@ -1419,15 +1475,20 @@ def admin_login():
 
 @app.route("/admin/logout")
 def admin_logout():
+    cookie_token = request.cookies.get("admin_session")
+    if cookie_token:
+        revoke_admin_session(cookie_token)
     resp = make_response(redirect("/admin"))
     resp.delete_cookie("admin_session", path="/")
     return resp
 
 @app.route("/admin")
 def admin_panel():
-    admin_key = os.getenv("CAPONERA_ADMIN_KEY", "sentinel2026").strip()
-    auth_ok, provided_key = is_admin_authenticated(admin_key)
+    admin_key = get_admin_key()
+    if not admin_key:
+        return jsonify({"success": False, "error": "Panel administrativo no configurado en este servidor"}), 503
 
+    auth_ok, provided_key = is_admin_authenticated(admin_key)
     if not auth_ok:
         if request.args.get("key"):
             return jsonify({"success": False, "error": "Acceso denegado: Llave de administración requerida o inválida"}), 403
@@ -1453,9 +1514,11 @@ def admin_panel():
 
 @app.route("/admin/caso/<int:viaje_id>", methods=["GET"])
 def admin_caso(viaje_id):
-    admin_key = os.getenv("CAPONERA_ADMIN_KEY", "sentinel2026").strip()
-    auth_ok, provided_key = is_admin_authenticated(admin_key)
+    admin_key = get_admin_key()
+    if not admin_key:
+        return jsonify({"success": False, "error": "Panel administrativo no configurado en este servidor"}), 503
 
+    auth_ok, provided_key = is_admin_authenticated(admin_key)
     if not auth_ok:
         return jsonify({"success": False, "error": "Acceso denegado: Llave de administración requerida o inválida"}), 403
 
