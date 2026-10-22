@@ -476,7 +476,7 @@ def get_config():
     try:
         tarifa_min = float(os.getenv("CAPONERA_TARIFA_MIN", "20.0"))
     except ValueError:
-        tarifa_min = 15.0
+        tarifa_min = 20.0
     try:
         tarifa_max = float(os.getenv("CAPONERA_TARIFA_MAX", "250.0"))
     except ValueError:
@@ -688,7 +688,7 @@ def solicitar_viaje():
     try:
         tarifa_min = float(os.getenv("CAPONERA_TARIFA_MIN", "20.0"))
     except ValueError:
-        tarifa_min = 15.0
+        tarifa_min = 20.0
     try:
         tarifa_max = float(os.getenv("CAPONERA_TARIFA_MAX", "250.0"))
     except ValueError:
